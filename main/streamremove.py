@@ -283,14 +283,7 @@ async def callback_query_handler(bot, callback_query: CallbackQuery):
     global downloaded
     global output_filename
 
-    # Safely check if reply_to_message exists
-    if callback_query.message.reply_to_message is None:
-        await callback_query.answer("Original message not found! Operation canceled.", show_alert=True)
-        await callback_query.message.delete()
-        if downloaded:
-            os.remove(downloaded)
-        return
-
+   
     # Validate the user
     if callback_query.from_user.id != callback_query.message.reply_to_message.from_user.id:
         await callback_query.answer("Unauthorized action! This selection is not for you.", show_alert=True)
