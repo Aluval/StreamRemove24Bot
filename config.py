@@ -10,6 +10,8 @@ API_ID = os.environ.get("API_ID", "10811400")
 API_HASH = os.environ.get("API_HASH", "191bf5ae7a6c39771e7b13cf4ffd1279")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "7090403697:AAEelXXHhNoWXR_duKpDJiFl39LbI7A3sU0")
 CAPTION = os.environ.get("CAPTION", "")
+DATABASE_URI = os.environ.get("DATABASE_URI", "mongodb+srv://INFINITYRENAME24BOT:INFINITYRENAME24BOT@cluster0.colorb9.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+DATABASE_NAME = os.environ.get("DATABASE_NAME", "Cluster0")
 #ALL FILES UPLOADED - CREDITS 🌟 - @Sunrises_24
 SUNRISES_PIC= "https://graph.org/file/bd91761f6e938e2e6d23a.jpg"  # Replace with your Telegraph link
 LOG_CHANNEL = os.environ.get("LOG_CHANNEL_ID", -1002145984196)
