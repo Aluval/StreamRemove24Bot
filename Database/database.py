@@ -14,8 +14,7 @@ class Database:
         
     async def get_user_settings(self, user_id):
         default_settings = {            
-            'gdrive_folder_id': None,      
-            }
+            'gdrive_folder_id': None,                              
         }
         user = await self.users_col.find_one({'id': user_id})
         if user:
