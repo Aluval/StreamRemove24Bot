@@ -277,19 +277,24 @@ async def callback_query_handler(bot, callback_query: CallbackQuery):
 
     await callback_query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
 """
+
 @Client.on_callback_query(filters.regex(r'toggle_\d+|done|cancel|reverse'))
 async def callback_query_handler(bot, callback_query: CallbackQuery):
     global selected_streams
     global downloaded
     global output_filename
 
-   
-    # Validate the user
-    if callback_query.from_user.id != callback_query.message.reply_to_message.from_user.id:
-        await callback_query.answer("Unauthorized action! This selection is not for you.", show_alert=True)
+    data = callback_query.data
+
+    # Handle missing reply_to_message
+    if not callback_query.message.reply_to_message:
+        await callback_query.answer("❗ Original command message is missing. Please restart the process.", show_alert=True)
         return
 
-    data = callback_query.data
+    # Ensure the user interacting matches the original command user
+    if callback_query.from_user.id != callback_query.message.reply_to_message.from_user.id:
+        await callback_query.answer("❗ You are not allowed to perform this action.", show_alert=True)
+        return
 
     if data == "cancel":
         await callback_query.message.delete()
@@ -298,7 +303,6 @@ async def callback_query_handler(bot, callback_query: CallbackQuery):
         return
 
     if data == "reverse":
-        # Handle reversing selection
         buttons = callback_query.message.reply_markup.inline_keyboard
         all_indices = {btn.callback_data.split('_')[1] for row in buttons for btn in row if btn.callback_data.startswith('toggle_')}
         selected_streams.symmetric_difference_update(all_indices)
@@ -340,7 +344,6 @@ async def callback_query_handler(bot, callback_query: CallbackQuery):
                 break
 
     await callback_query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
-
 
 # Process media function
 async def process_media(bot, callback_query, selected_streams, downloaded, output_filename, sts):
