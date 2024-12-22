@@ -36,11 +36,12 @@ async def display_user_settings(client, msg, edit=False):
     user_id = msg.from_user.id
     
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("💠", callback_data="sunrises24_bot_updates")],
+        [InlineKeyboardButton("Sunrises24 Bot Updates 💠", callback_data="sunrises24_bot_updates")],
         [InlineKeyboardButton("View Google Drive Folder ID 📂", callback_data="preview_gdrive")],
-        [InlineKeyboardButton("💠", callback_data="sunrises24_bot_updates")],
         [InlineKeyboardButton("Close ❌", callback_data="del")]
     ])
+    
+    await msg.reply("Here are your settings:", reply_markup=keyboard)
     
 @Client.on_message(filters.private & filters.command("mirror"))
 async def mirror_to_google_drive(bot, msg: Message):
