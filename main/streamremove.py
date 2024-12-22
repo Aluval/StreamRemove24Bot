@@ -372,6 +372,151 @@ async def process_media(bot, callback_query, selected_streams, downloaded, outpu
         os.remove(file_thumb)
     await sts.delete()
 
+
+# Command handler for /list
+@Client.on_message(filters.private & filters.command("list"))
+async def list_files(bot, msg: Message):
+    user_id = msg.from_user.id
+
+    # Retrieve the user's Google Drive folder ID from database
+    gdrive_folder_id = await db.get_gdrive_folder_id(user_id)
+
+    if not gdrive_folder_id:
+        return await msg.reply_text("Google Drive folder ID is not set. Please use the /gdriveid command to set it.")
+
+    sts = await msg.reply_text("Fetching File List...🔎")
+
+    try:
+        files = get_files_in_folder(gdrive_folder_id)
+        if not files:
+            return await sts.edit("No files found in the specified folder.")
+
+        # Categorize files
+        file_types = {'Images': [], 'Movies': [], 'Audios': [], 'Archives': [], 'Others': []}
+        for file in files:
+            mime_type = file['mimeType']
+            file_name = file['name'].lower()
+            if mime_type.startswith('image/'):
+                file_types['Images'].append(file)
+            elif mime_type.startswith('video/') or file_name.endswith(('.mkv', '.mp4')):
+                file_types['Movies'].append(file)
+            elif mime_type.startswith('audio/') or file_name.endswith(('.aac', '.eac3', '.mp3', '.opus', '.eac')):
+                file_types['Audios'].append(file)
+            elif file_name.endswith(('.zip', '.rar')):
+                file_types['Archives'].append(file)
+            else:
+                file_types['Others'].append(file)
+
+        # Create inline buttons for each category with emojis
+        buttons = []
+        for category, items in file_types.items():
+            if items:
+                if category == 'Images':
+                    emoji = '🖼️'
+                elif category == 'Movies':
+                    emoji = '🎞️'
+                elif category == 'Audios':
+                    emoji = '🔊'
+                elif category == 'Archives':
+                    emoji = '📦'
+                else:
+                    emoji = '📁'
+
+                buttons.append([InlineKeyboardButton(f"{emoji} {category}", callback_data=f"{category}")])
+                for file in sorted(items, key=lambda x: x['name']):
+                    file_link = f"https://drive.google.com/file/d/{file['id']}/view"
+                    buttons.append([InlineKeyboardButton(file['name'], url=file_link)])
+
+        await sts.edit(
+            "Files In The Specified Folder 📁:",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+    except HttpError as error:
+        await sts.edit(f"An error occurred: {error}")
+    except Exception as e:
+        await sts.edit(f"Error: {e}")
+
+#cleam command
+@Client.on_message(filters.private & filters.command("clean"))
+async def clean_files(bot, msg: Message):
+    user_id = msg.from_user.id
+
+    # Retrieve the user's Google Drive folder ID from database
+    gdrive_folder_id = await db.get_gdrive_folder_id(user_id)
+
+    if not gdrive_folder_id:
+        return await msg.reply_text("Google Drive folder ID is not set. Please use the /gdriveid command to set it.")
+
+    try:
+        # Check if the command is followed by a file name or a direct link
+        command_parts = msg.text.split(maxsplit=1)
+        if len(command_parts) < 2:
+            return await msg.reply_text("Please provide a file name or direct link to delete.")
+
+        query_or_link = command_parts[1].strip()
+
+        # If the query_or_link starts with 'http', treat it as a direct link
+        if query_or_link.startswith("http"):
+            # Extract file ID from the direct link
+            file_id = extract_id_from_url(query_or_link)
+            if not file_id:
+                return await msg.reply_text("Invalid Google Drive file link. Please provide a valid direct link.")
+
+            # Delete the file by its ID
+            drive_service.files().delete(fileId=file_id).execute()
+            await msg.reply_text(f"Deleted File with ID '{file_id}' Successfully ✅.")
+
+        else:
+            # Treat it as a file name and delete files by name in the specified folder
+            file_name = query_or_link
+
+            # Define query to find files by name in the specified folder
+            query = f"'{gdrive_folder_id}' in parents and trashed=false and name='{file_name}'"
+
+            # Execute the query to find matching files
+            response = drive_service.files().list(q=query, fields='files(id, name)').execute()
+            files = response.get('files', [])
+
+            if not files:
+                return await msg.reply_text(f"No files found with the name '{file_name}' in the specified folder.")
+
+            # Delete each found file
+            for file in files:
+                drive_service.files().delete(fileId=file['id']).execute()
+                await msg.reply_text(f"Deleted File '{file['name']}' Successfully ✅.")
+
+    except HttpError as error:
+        await msg.reply_text(f"An error occurred: {error}")
+    except Exception as e:
+        await msg.reply_text(f"An unexpected error occurred: {e}")
+        
+@Client.on_message(filters.command("clear") & filters.user(ADMIN))
+async def clear_database_handler(client: Client, msg: Message):
+    try:
+        await db.clear_database()
+        await msg.reply_text("Database has been cleared✅.")
+    except Exception as e:
+        await msg.reply_text(f"An error occurred: {e}")
+
+#ALL FILES UPLOADED - CREDITS 🌟 - @Sunrises_24
+#Ping
+@Client.on_message(filters.command("ping"))
+async def ping(bot, msg):
+    start_t = time.time()
+    rm = await msg.reply_text("Checking")
+    end_t = time.time()
+    time_taken_s = (end_t - start_t) * 1000
+    await rm.edit(f"Pong!📍\n{time_taken_s:.3f} ms")
+
+#safe edit message 
+async def safe_edit_message(message, new_text):
+    try:
+        if message.text != new_text:
+            await message.edit(new_text[:4096])  # Ensure text does not exceed 4096 characters
+    except Exception as e:
+        print(f"Failed to edit message: {e}")
+
+
 #ALL FILES UPLOADED - CREDITS 🌟 - @Sunrises_24
 @Client.on_callback_query(filters.regex("del"))
 async def closed(bot, msg):
