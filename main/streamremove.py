@@ -216,6 +216,7 @@ async def streamremove(bot, msg):
             if downloaded:
                 os.remove(downloaded)
 
+"""
 @Client.on_callback_query(filters.regex(r'toggle_\d+|done|cancel|reverse'))
 async def callback_query_handler(bot, callback_query: CallbackQuery):
     global selected_streams
@@ -275,7 +276,77 @@ async def callback_query_handler(bot, callback_query: CallbackQuery):
                 break
 
     await callback_query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
+"""
+@Client.on_callback_query(filters.regex(r'toggle_\d+|done|cancel|reverse'))
+async def callback_query_handler(bot, callback_query: CallbackQuery):
+    global selected_streams
+    global downloaded
+    global output_filename
 
+    # Safely check if reply_to_message exists
+    if callback_query.message.reply_to_message is None:
+        await callback_query.answer("Original message not found! Operation canceled.", show_alert=True)
+        await callback_query.message.delete()
+        if downloaded:
+            os.remove(downloaded)
+        return
+
+    # Validate the user
+    if callback_query.from_user.id != callback_query.message.reply_to_message.from_user.id:
+        await callback_query.answer("Unauthorized action! This selection is not for you.", show_alert=True)
+        return
+
+    data = callback_query.data
+
+    if data == "cancel":
+        await callback_query.message.delete()
+        if downloaded:
+            os.remove(downloaded)
+        return
+
+    if data == "reverse":
+        # Handle reversing selection
+        buttons = callback_query.message.reply_markup.inline_keyboard
+        all_indices = {btn.callback_data.split('_')[1] for row in buttons for btn in row if btn.callback_data.startswith('toggle_')}
+        selected_streams.symmetric_difference_update(all_indices)
+
+        # Update button text
+        for row in buttons:
+            for button in row:
+                if button.callback_data.startswith("toggle_"):
+                    index = button.callback_data.split('_')[1]
+                    if index in selected_streams:
+                        button.text = f"✅ {button.text.lstrip('✅').strip()}"
+                    else:
+                        button.text = button.text.lstrip('✅').strip()
+
+        await callback_query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
+        return
+
+    if data == "done":
+        sts = await callback_query.message.edit_text("💠 Removing selected streams... ⚡")
+        await process_media(bot, callback_query, selected_streams, downloaded, output_filename, sts)
+        return
+
+    # Toggle selection state
+    index = data.split('_')[1]
+    if index in selected_streams:
+        selected_streams.remove(index)
+    else:
+        selected_streams.add(index)
+
+    # Update buttons to reflect selection
+    buttons = callback_query.message.reply_markup.inline_keyboard
+    for row in buttons:
+        for button in row:
+            if button.callback_data == f"toggle_{index}":
+                if button.text.startswith("✅"):
+                    button.text = button.text[2:]  # Remove the checkmark
+                else:
+                    button.text = f"✅ {button.text}"  # Add the checkmark
+                break
+
+    await callback_query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
 
 
 # Process media function
