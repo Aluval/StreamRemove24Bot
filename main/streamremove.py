@@ -29,6 +29,90 @@ from config import *
 selected_streams = set()
 downloaded = None
 
+@Client.on_message(filters.private & filters.command("usersettings"))
+async def display_user_settings(client, msg, edit=False):
+    user_id = msg.from_user.id
+    
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("💠", callback_data="sunrises24_bot_updates")],
+        [InlineKeyboardButton("View Google Drive Folder ID 📂", callback_data="preview_gdrive")],
+        [InlineKeyboardButton("💠", callback_data="sunrises24_bot_updates")],
+        [InlineKeyboardButton("Close ❌", callback_data="del")]
+    ])
+    
+@Client.on_message(filters.private & filters.command("mirror"))
+async def mirror_to_google_drive(bot, msg: Message):
+   
+    user_id = msg.from_user.id
+    
+    # Retrieve the user's Google Drive folder ID
+    gdrive_folder_id = await db.get_gdrive_folder_id(user_id)
+    
+    if not gdrive_folder_id:
+        return await msg.reply_text("Google Drive folder ID is not set. Please use the /gdriveid command to set it.")
+
+    reply = msg.reply_to_message
+    if len(msg.command) < 2 or not reply:
+        return await msg.reply_text("Please reply to a file with the new filename and extension.")
+
+    media = reply.document or reply.audio or reply.video
+    if not media:
+        return await msg.reply_text("Please reply to a file with the new filename and extension.")
+
+    new_name = msg.text.split(" ", 1)[1]
+
+    try:
+        # Show progress message for downloading
+        sts = await msg.reply_text("🚀 Downloading...")
+        
+        # Download the file
+        downloaded_file = await bot.download_media(message=reply, file_name=new_name, progress=progress_message, progress_args=("Downloading", sts, time.time()))
+        filesize = os.path.getsize(downloaded_file)
+        
+        # Once downloaded, update the message to indicate uploading
+        await sts.edit("💠 Uploading...")
+        
+        start_time = time.time()
+
+        # Upload file to Google Drive
+        file_metadata = {'name': new_name, 'parents': [gdrive_folder_id]}
+        media = MediaFileUpload(downloaded_file, resumable=True)
+
+        # Upload with progress monitoring
+        request = drive_service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink')
+        response = None
+        while response is None:
+            status, response = request.next_chunk()
+            if status:
+                current_progress = status.progress() * 100
+                await progress_message(current_progress, 100, "Uploading to Google Drive", sts, start_time)
+
+        file_id = response.get('id')
+        file_link = response.get('webViewLink')
+
+        # Prepare caption for the uploaded file
+        if CAPTION:
+            caption_text = CAPTION.format(file_name=new_name, file_size=humanbytes(filesize))
+        else:
+            caption_text = f"Uploaded File: {new_name}\nSize: {humanbytes(filesize)}"
+
+        # Send the Google Drive link to the user
+        button = [
+            [InlineKeyboardButton("☁️ CloudUrl ☁️", url=f"{file_link}")]
+        ]
+        await msg.reply_text(
+            f"File successfully mirrored and uploaded to Google Drive!\n\n"
+            f"Google Drive Link: [View File]({file_link})\n\n"
+            f"Uploaded File: {new_name}\n"
+            f"Size: {humanbytes(filesize)}",
+            reply_markup=InlineKeyboardMarkup(button)
+        )
+        os.remove(downloaded_file)
+        await sts.delete()
+
+    except Exception as e:
+        await sts.edit(f"Error: {e}")
+            
 #handler is streamremove
 @Client.on_message(filters.command("streamremove") & filters.private)
 async def streamremove(bot, msg):
@@ -286,4 +370,24 @@ async def process_media(bot, callback_query, selected_streams, downloaded, outpu
         os.remove(file_thumb)
     await sts.delete()
 
+#ALL FILES UPLOADED - CREDITS 🌟 - @Sunrises_24
+@Client.on_callback_query(filters.regex("del"))
+async def closed(bot, msg):
+    try:
+        await msg.message.delete()
+    except:
+        return
+
+@Client.on_callback_query(filters.regex("^preview_gdrive$"))
+async def inline_preview_gdrive(bot, callback_query):
+    user_id = callback_query.from_user.id
+    
+    # Retrieve Google Drive folder ID from the database
+    gdrive_folder_id = await db.get_gdrive_folder_id(user_id)
+    
+    if not gdrive_folder_id:
+        return await callback_query.message.reply_text(f"Google Drive Folder ID is not set for user `{user_id}`. Use /gdriveid {{your_gdrive_folder_id}} to set it.")
+    
+    await callback_query.message.reply_text(f"Current Google Drive Folder ID for user `{user_id}`: {gdrive_folder_id}")
+    
 
