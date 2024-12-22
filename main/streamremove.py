@@ -29,7 +29,7 @@ selected_streams = set()
 downloaded = None
 
 #handler is streamremove
-@Client.on_message(filters.command("streamremove") & filters.chat(GROUP))
+@Client.on_message(filters.command("streamremove") & filters.private)
 async def streamremove(bot, msg):
     global selected_streams
     global downloaded
