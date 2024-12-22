@@ -24,6 +24,8 @@ from datetime import timedelta
 from os import execl as osexecl
 from sys import executable
 from config import *
+from Database.database import db
+from pymongo.errors import PyMongoError
 
 #varibles for streameremove
 selected_streams = set()
@@ -377,6 +379,26 @@ async def closed(bot, msg):
         await msg.message.delete()
     except:
         return
+
+    # Callback query handler for the "sunrises24_bot_updates" button
+@Client.on_callback_query(filters.regex("^sunrises24_bot_updates$"))
+async def sunrises24_bot_updates_callback(_, callback_query):
+    await callback_query.answer("MADE BY @SUNRISES24BOTUPDATES ❤️", show_alert=True)    
+    
+@Client.on_message(filters.private & filters.command("gdriveid"))
+async def setup_gdrive_id(bot, msg: Message):
+    user_id = msg.from_user.id
+    args = msg.text.split(" ", 1)
+    if len(args) != 2:
+        return await msg.reply_text("Usage: /gdriveid {your_gdrive_folder_id}")
+    
+    gdrive_folder_id = args[1].strip()
+    
+    # Save Google Drive folder ID to the database
+    await db.save_gdrive_folder_id(user_id, gdrive_folder_id)
+    
+    await msg.reply_text(f"Google Drive folder ID set to: {gdrive_folder_id} for user `{user_id}`\n\nGoogle Drive folder ID set successfully✅!")
+
 
 @Client.on_callback_query(filters.regex("^preview_gdrive$"))
 async def inline_preview_gdrive(bot, callback_query):
