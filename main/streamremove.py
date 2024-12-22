@@ -278,7 +278,6 @@ async def callback_query_handler(bot, callback_query: CallbackQuery):
     await callback_query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
 
 """
-
 @Client.on_callback_query(filters.regex(r'toggle_\d+|done|cancel|reverse'))
 async def callback_query_handler(bot, callback_query: CallbackQuery):
     global selected_streams
@@ -286,8 +285,8 @@ async def callback_query_handler(bot, callback_query: CallbackQuery):
     global output_filename
     data = callback_query.data
 
-    # Check if the user who initiated the command matches the callback query user
-    if callback_query.from_user.id != callback_query.message.reply_to_message.from_user.id:
+    # Ensure reply_to_message exists and compare user IDs
+    if not callback_query.message.reply_to_message or callback_query.from_user.id != callback_query.message.reply_to_message.from_user.id:
         return
 
     if data == "cancel":
@@ -338,7 +337,7 @@ async def callback_query_handler(bot, callback_query: CallbackQuery):
                 break
 
     await callback_query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
-    
+
 # Process media function
 async def process_media(bot, callback_query, selected_streams, downloaded, output_filename, sts):
     user_id = callback_query.from_user.id
