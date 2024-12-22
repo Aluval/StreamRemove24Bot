@@ -13,3 +13,5 @@ oauth2client==4.1.3
 asyncio==3.4.3
 datetime
 ujson
+motor
+pymongo
