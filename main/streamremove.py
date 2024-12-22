@@ -3,9 +3,6 @@
 import subprocess
 import os, json
 import time
-import shutil
-import zipfile
-import tarfile
 import ffmpeg
 from pyrogram.types import Message
 from pyrogram.types import Document, Video
@@ -23,8 +20,6 @@ from main.gdrive import upload_to_google_drive, extract_id_from_url, copy_file, 
 from googleapiclient.errors import HttpError
 import datetime
 from datetime import timedelta
-import psutil
-from pymongo.errors import PyMongoError
 from os import execl as osexecl
 from sys import executable
 from config import *
