@@ -194,7 +194,8 @@ markup = InlineKeyboardMarkup(buttons)
 selected_streams.clear()
 await sts.edit("Select the streams you want to remove (you have 60 seconds):", reply_markup=markup)
 
-@Client.on_callback_query(filters.regex(r'toggle_\d+|done|cancel|reverse')) async def callback_query_handler(bot, callback_query: CallbackQuery): global selected_streams, downloaded, output_filename data = callback_query.data
+@Client.on_callback_query(filters.regex(r'toggle_\d+|done|cancel|reverse')) 
+async def callback_query_handler(bot, callback_query: CallbackQuery): global selected_streams, downloaded, output_filename data = callback_query.data
 
 if not callback_query.message.reply_to_message or callback_query.from_user.id != callback_query.message.reply_to_message.from_user.id:
     return
