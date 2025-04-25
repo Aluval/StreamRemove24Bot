@@ -31,6 +31,8 @@ from pymongo.errors import PyMongoError
 selected_streams = set()
 downloaded = None
 
+output_filename = ""
+
 @Client.on_message(filters.private & filters.command("usersettings"))
 async def display_user_settings(client, msg, edit=False):
     user_id = msg.from_user.id
@@ -278,6 +280,7 @@ async def callback_query_handler(bot, callback_query: CallbackQuery):
     await callback_query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
 
 """
+
 @Client.on_callback_query(filters.regex(r'toggle_\d+|done|cancel|reverse'))
 async def callback_query_handler(bot, callback_query: CallbackQuery):
     global selected_streams
@@ -285,32 +288,44 @@ async def callback_query_handler(bot, callback_query: CallbackQuery):
     global output_filename
     data = callback_query.data
 
-    # Ensure reply_to_message exists and compare user IDs
+    # Ensure the user who pressed the button is the one who initiated the command
     if not callback_query.message.reply_to_message or callback_query.from_user.id != callback_query.message.reply_to_message.from_user.id:
         return
 
     if data == "cancel":
         await callback_query.message.delete()
-        if downloaded:
+        if downloaded and os.path.exists(downloaded):
             os.remove(downloaded)
         return
 
     if data == "reverse":
-        buttons = callback_query.message.reply_markup.inline_keyboard
-        all_indices = {btn.callback_data.split('_')[1] for row in buttons for btn in row if btn.callback_data.startswith('toggle_')}
+        # Get all toggle indices from buttons
+        all_indices = {
+            button.callback_data.split('_')[1]
+            for row in callback_query.message.reply_markup.inline_keyboard
+            for button in row
+            if button.callback_data.startswith('toggle_')
+        }
+
+        # Reverse current selection
         selected_streams.symmetric_difference_update(all_indices)
 
-        # Update button text
-        for row in buttons:
+        # Rebuild buttons with updated checkmarks
+        new_buttons = []
+        for row in callback_query.message.reply_markup.inline_keyboard:
+            new_row = []
             for button in row:
                 if button.callback_data.startswith("toggle_"):
-                    index = button.callback_data.split('_')[1]
-                    if index in selected_streams:
-                        button.text = f"✅ {button.text.lstrip('✅').strip()}"
-                    else:
-                        button.text = button.text.lstrip('✅').strip()
+                    idx = button.callback_data.split('_')[1]
+                    label = button.text.lstrip("✅").strip()
+                    if idx in selected_streams:
+                        label = f"✅ {label}"
+                    new_row.append(InlineKeyboardButton(label, callback_data=button.callback_data))
+                else:
+                    new_row.append(button)
+            new_buttons.append(new_row)
 
-        await callback_query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
+        await callback_query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(new_buttons))
         return
 
     if data == "done":
@@ -318,26 +333,30 @@ async def callback_query_handler(bot, callback_query: CallbackQuery):
         await process_media(bot, callback_query, selected_streams, downloaded, output_filename, sts)
         return
 
-    # Toggle selection state
+    # For toggle_X stream buttons
     index = data.split('_')[1]
     if index in selected_streams:
         selected_streams.remove(index)
     else:
         selected_streams.add(index)
 
-    # Update buttons to reflect selection
-    buttons = callback_query.message.reply_markup.inline_keyboard
-    for row in buttons:
+    # Rebuild the inline keyboard with updated checkmarks
+    new_buttons = []
+    for row in callback_query.message.reply_markup.inline_keyboard:
+        new_row = []
         for button in row:
-            if button.callback_data == f"toggle_{index}":
-                if button.text.startswith("✅"):
-                    button.text = button.text[2:]  # Remove the checkmark
-                else:
-                    button.text = f"✅ {button.text}"  # Add the checkmark
-                break
+            if button.callback_data.startswith("toggle_"):
+                idx = button.callback_data.split('_')[1]
+                label = button.text.lstrip("✅").strip()
+                if idx in selected_streams:
+                    label = f"✅ {label}"
+                new_row.append(InlineKeyboardButton(label, callback_data=button.callback_data))
+            else:
+                new_row.append(button)
+        new_buttons.append(new_row)
 
-    await callback_query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
-
+    await callback_query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(new_buttons))
+    
 # Process media function
 async def process_media(bot, callback_query, selected_streams, downloaded, output_filename, sts):
     user_id = callback_query.from_user.id
