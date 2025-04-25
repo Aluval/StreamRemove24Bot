@@ -123,8 +123,8 @@ downloaded = None
 output_filename = "" 
 FILE_SIZE_LIMIT = 2 * 1024 * 1024 * 1024  # 2GB as example
 
-@Client.on_message(filters.command("streamremove") & filters.private) async def streamremove(bot, msg): global selected_streams, downloaded, output_filename
-
+@Client.on_message(filters.command("streamremove") & filters.private) 
+async def streamremove(bot, msg): global selected_streams, downloaded, output_filename
 reply = msg.reply_to_message
 if not reply:
     return await msg.reply_text("❗ Please reply to a media file with the command\nFormat: `/streamremove -n filename.mkv`")
