@@ -551,7 +551,6 @@ async def callback_query_handler(bot, callback_query: CallbackQuery):
         await process_media(bot, callback_query, selected_streams, downloaded, output_filename, sts)
         return
 
-    # toggle streams
     index = data.split('_')[1]
     if index in selected_streams:
         selected_streams.remove(index)
@@ -578,7 +577,9 @@ async def process_media(bot, callback_query, selected_streams, downloaded, outpu
     ffmpeg_cmd = ['ffmpeg', '-i', downloaded, '-map', '0']
     for idx in selected_streams:
         ffmpeg_cmd.extend(['-map', f'-0:{idx}'])
-    ffmpeg_cmd.extend(['-c', 'copy', output_file, '-y'])
+    ffmpeg_cmd.extend(['-c', 'copy', output_file, '-y']
+
+    )
 
     process = await asyncio.create_subprocess_exec(
         *ffmpeg_cmd,
@@ -589,19 +590,27 @@ async def process_media(bot, callback_query, selected_streams, downloaded, outpu
 
     if process.returncode != 0:
         await safe_edit_message(sts, f"❗ FFmpeg error: {stderr.decode('utf-8')}")
-        os.remove(downloaded)
-        if os.path.exists(output_file):
+        if downloaded and os.path.exists(downloaded):
+            os.remove(downloaded)
+        if output_file and os.path.exists(output_file):
             os.remove(output_file)
         return
 
-    # --- Thumbnail setup ---
+    # Get thumbnail
     file_thumb = None
+    thumb_path = None
     try:
-        thumbnail_file_id = await db_get_thumbnail(user_id)  # Assume db_get_thumbnail exists
+        thumbnail_file_id = await db_get_thumbnail(user_id)
         if thumbnail_file_id:
-            file_thumb = await bot.download_media(thumbnail_file_id)
-    except Exception:
-        pass
+            thumb_path = await bot.download_media(thumbnail_file_id, file_name=f"thumb_{user_id}.jpg")
+    except Exception as e:
+        print(f"Thumbnail download error: {e}")
+        thumb_path = None
+
+    if thumb_path and os.path.exists(thumb_path):
+        file_thumb = thumb_path
+    else:
+        file_thumb = None
 
     filesize = os.path.getsize(output_file)
     filesize_human = humanbytes(filesize)
@@ -615,13 +624,7 @@ async def process_media(bot, callback_query, selected_streams, downloaded, outpu
         button = [[InlineKeyboardButton("☁️ CloudUrl ☁️", url=file_link)]]
         await bot.send_message(
             chat_id=user_id,
-            text=(
-                f"**✅ File successfully processed and uploaded!**\n\n"
-                f"📂 **File:** {output_filename}\n"
-                f"🔗 **Link:** [View Here]({file_link})\n"
-                f"💾 **Size:** {filesize_human}\n\n"
-                f"👤 **Requested by:** {callback_query.from_user.mention}"
-            ),
+            text=f"**✅ Uploaded to GDrive:** [View File]({file_link})",
             reply_markup=InlineKeyboardMarkup(button)
         )
     else:
@@ -637,13 +640,12 @@ async def process_media(bot, callback_query, selected_streams, downloaded, outpu
         except Exception as e:
             await safe_edit_message(sts, f"❗ Upload Error: {e}")
 
-    # Send notification to log channel
     await bot.send_message(
         chat_id=LOG_CHANNEL,
         text=f"✅ File `{output_filename}` processed and sent to {callback_query.from_user.mention}."
     )
 
-    # Cleanup
+    # Clean up
     if downloaded and os.path.exists(downloaded):
         os.remove(downloaded)
     if output_file and os.path.exists(output_file):
@@ -652,6 +654,9 @@ async def process_media(bot, callback_query, selected_streams, downloaded, outpu
         os.remove(file_thumb)
 
     await sts.delete()
+
+
+
 
 # Command handler for /list
 @Client.on_message(filters.private & filters.command("list"))
