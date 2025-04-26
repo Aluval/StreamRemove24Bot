@@ -5,10 +5,9 @@ from config import DATABASE_NAME, DATABASE_URI
 class Database:
     def __init__(self, uri, database_name):        
         self._client = motor.motor_asyncio.AsyncIOMotorClient(uri)
-        self.db = self._client[database_name]
+        self.db = self._client[database_name]        
+        self.users_col = self.db["users"]
         self.files_col = self.db.files
-        self.file_data_col = self.db['file_data']
-        self.users_col = self.db["users"]    
     
     
     async def update_user_settings(self, user_id, settings):
