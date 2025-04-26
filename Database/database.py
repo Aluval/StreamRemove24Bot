@@ -8,6 +8,7 @@ class Database:
         self.db = self._client[database_name]
         self.users_col = self.db["users"]    
     
+    
     async def update_user_settings(self, user_id, settings):
         await self.users_col.update_one({'id': user_id}, {'$set': {'settings': settings}}, upsert=True)
         
@@ -20,6 +21,7 @@ class Database:
             return user.get('settings', default_settings)
         return default_settings
           
+                
     async def save_gdrive_folder_id(self, user_id, folder_id):
         await self.users_col.update_one({'id': user_id}, {'$set': {'settings.gdrive_folder_id': folder_id}}, upsert=True)
     
@@ -30,25 +32,26 @@ class Database:
         return None
      
     async def clear_database(self):
+        # Drop all collections
         await self.users_col.drop()
 
-    # THESE METHODS NEED TO BE INSIDE THE CLASS
-    async def set_user_plan(self, user_id, plan_type, remaining, expires_at):
-        await self.users_col.update_one(
-            {"id": user_id},
-            {"$set": {"plan": {"type": plan_type, "remaining": remaining, "expires_at": expires_at}}},
-            upsert=True
-        )
+async def set_user_plan(self, user_id, plan_type, remaining, expires_at):
+    await self.users_col.update_one(
+        {"id": user_id},
+        {"$set": {"plan": {"type": plan_type, "remaining": remaining, "expires_at": expires_at}}},
+        upsert=True
+    )
 
-    async def get_user_plan(self, user_id):
-        user = await self.users_col.find_one({"id": user_id})
-        return user.get("plan") if user else None
+async def get_user_plan(self, user_id):
+    user = await self.users_col.find_one({"id": user_id})
+    return user.get("plan") if user else None
 
-    async def update_remaining_count(self, user_id, remaining):
-        await self.users_col.update_one(
-            {"id": user_id},
-            {"$set": {"plan.remaining": remaining}}
-        )
+async def update_remaining_count(self, user_id, remaining):
+    await self.users_col.update_one(
+        {"id": user_id},
+        {"$set": {"plan.remaining": remaining}}
+    )
                     
 # Initialize the database instance
-db = Database(DATABASE_URI, DATABASE_NAME)
+db = Database(DATABASE_URI, DATABASE_NAME)    
+                  
