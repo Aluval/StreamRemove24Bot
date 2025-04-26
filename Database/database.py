@@ -34,23 +34,6 @@ class Database:
     async def clear_database(self):
         # Drop all collections
         await self.users_col.drop()
-
-async def set_user_plan(self, user_id, plan_type, remaining, expires_at):
-    await self.users_col.update_one(
-        {"id": user_id},
-        {"$set": {"plan": {"type": plan_type, "remaining": remaining, "expires_at": expires_at}}},
-        upsert=True
-    )
-
-async def get_user_plan(self, user_id):
-    user = await self.users_col.find_one({"id": user_id})
-    return user.get("plan") if user else None
-
-async def update_remaining_count(self, user_id, remaining):
-    await self.users_col.update_one(
-        {"id": user_id},
-        {"$set": {"plan.remaining": remaining}}
-    )
                     
 # Initialize the database instance
 db = Database(DATABASE_URI, DATABASE_NAME)    
