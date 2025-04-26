@@ -600,7 +600,7 @@ async def process_media(bot, callback_query, selected_streams, downloaded, outpu
     file_thumb = None
     thumb_path = None
     try:
-        thumbnail_file_id = await db_get_thumbnail(user_id)
+        thumbnail_file_id = await db.get_thumbnail(user_id)
         if thumbnail_file_id:
             thumb_path = await bot.download_media(thumbnail_file_id, file_name=f"thumb_{user_id}.jpg")
     except Exception as e:
