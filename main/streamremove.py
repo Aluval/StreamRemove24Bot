@@ -246,7 +246,9 @@ for row in callback_query.message.reply_markup.inline_keyboard:
 
 await callback_query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
 
-async def process_media(bot, callback_query, selected_streams, downloaded, output_filename, sts): output_file = output_filename ffmpeg_cmd = ['ffmpeg', '-i', downloaded]
+async def process_media(bot, callback_query, selected_streams, downloaded, output_filename, sts): 
+    output_file = output_filename 
+    ffmpeg_cmd = ['ffmpeg', '-i', downloaded]
 
 for idx in selected_streams:
     ffmpeg_cmd.extend(['-map', f'-0:{idx}'])
