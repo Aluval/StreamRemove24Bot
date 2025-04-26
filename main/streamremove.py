@@ -44,7 +44,289 @@ async def display_user_settings(client, msg, edit=False):
     ])
     
     await msg.reply("Here are your settings:", reply_markup=keyboard)
+
+from datetime import datetime, timedelta
+
+# Plan Types
+PLANS = {
+    "free": {"videos": 2, "expires_in": None},
+    "5videos": {"videos": 5, "expires_in": None},
+    "10videos": {"videos": 10, "expires_in": None},
+    "unlimited": {"videos": None, "expires_in": 24}  # hours
+}
+
+# Set/Update Plan (Admin only)
+@Client.on_message(filters.command("setplan") & filters.user(ADMIN))
+async def set_plan(bot, msg):
+    args = msg.text.split(maxsplit=2)
+    if len(args) < 3:
+        return await msg.reply_text("Usage: /setplan <user_id> <plan_type>")
+
+    user_id = int(args[1])
+    plan_type = args[2].lower()
+
+    if plan_type not in PLANS:
+        return await msg.reply_text("Invalid plan type! Choose from: free, 5videos, 10videos, unlimited.")
+
+    plan_data = PLANS[plan_type]
+    expires_at = None
+
+    if plan_type == "unlimited":
+        expires_at = (datetime.utcnow() + timedelta(hours=plan_data["expires_in"])).timestamp()
+
+    await db.set_user_plan(user_id, plan_type, plan_data["videos"], expires_at)
+    await msg.reply_text(f"Plan '{plan_type}' set for user {user_id}!")
+
+# Check Plan
+@Client.on_message(filters.command("myplan") & filters.private)
+async def my_plan(bot, msg):
+    user_id = msg.from_user.id
+    plan = await db.get_user_plan(user_id)
+
+    if not plan:
+        return await msg.reply_text("No plan found! You are using the Free Plan (2 videos).")
+
+    plan_type = plan.get("type")
+    remaining = plan.get("remaining")
+    expires_at = plan.get("expires_at")
+
+    if plan_type == "unlimited":
+        expiry_time = datetime.fromtimestamp(expires_at)
+        await msg.reply_text(f"Plan: Unlimited\nExpires at: {expiry_time} UTC")
+    else:
+        await msg.reply_text(f"Plan: {plan_type}\nRemaining videos: {remaining}")
+
+# Check & Deduct Video Count (Call this inside /mirror or /streamremove)
+async def check_and_deduct_usage(user_id):
+    plan = await db.get_user_plan(user_id)
+
+    if not plan:
+        # Free plan
+        plan = {"type": "free", "remaining": 2, "expires_at": None}
+        await db.set_user_plan(user_id, "free", 2, None)
+
+    if plan["type"] == "unlimited":
+        # Check expiry
+        if datetime.utcnow().timestamp() > plan["expires_at"]:
+            await db.set_user_plan(user_id, "free", 2, None)
+            return False, "Your unlimited plan expired. You are now on the Free Plan."
+        return True, None
+
+    if plan["remaining"] <= 0:
+        return False, "Plan limit reached! Please upgrade your plan."
+
+    # Deduct remaining count
+    await db.update_remaining_count(user_id, plan["remaining"] - 1)
+    return True, None
+
+@Client.on_message(filters.private & filters.command("mirror"))
+async def mirror_to_google_drive(bot, msg: Message):
+    user_id = msg.from_user.id
     
+    # Retrieve the user's plan
+    plan = await db.get_user_plan(user_id)
+    
+    if not plan:
+        # Free Plan, Default: 2 videos
+        plan = {"type": "free", "remaining": 2, "expires_at": None}
+        await db.set_user_plan(user_id, "free", 2, None)
+
+    if plan["type"] == "unlimited":
+        # Check if the unlimited plan has expired
+        if datetime.utcnow().timestamp() > plan["expires_at"]:
+            await db.set_user_plan(user_id, "free", 2, None)
+            return await msg.reply_text("Your unlimited plan expired. You are now on the Free Plan.")
+    elif plan["remaining"] <= 0:
+        return await msg.reply_text("Plan limit reached! Please upgrade your plan.")
+
+    # Proceed to handle the file
+    reply = msg.reply_to_message
+    if len(msg.command) < 2 or not reply:
+        return await msg.reply_text("Please reply to a file with the new filename and extension.")
+    
+    media = reply.document or reply.audio or reply.video
+    if not media:
+        return await msg.reply_text("Please reply to a file with the new filename and extension.")
+
+    new_name = msg.text.split(" ", 1)[1]
+
+    try:
+        # Show progress message for downloading
+        sts = await msg.reply_text("🚀 Downloading...")
+
+        # Download the file
+        downloaded_file = await bot.download_media(message=reply, file_name=new_name, progress=progress_message, progress_args=("Downloading", sts, time.time()))
+        filesize = os.path.getsize(downloaded_file)
+        
+        # Once downloaded, update the message to indicate uploading
+        await sts.edit("💠 Uploading...")
+
+        start_time = time.time()
+
+        # Upload file to Google Drive
+        file_metadata = {'name': new_name, 'parents': [gdrive_folder_id]}
+        media = MediaFileUpload(downloaded_file, resumable=True)
+
+        # Upload with progress monitoring
+        request = drive_service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink')
+        response = None
+        while response is None:
+            status, response = request.next_chunk()
+            if status:
+                current_progress = status.progress() * 100
+                await progress_message(current_progress, 100, "Uploading to Google Drive", sts, start_time)
+
+        file_id = response.get('id')
+        file_link = response.get('webViewLink')
+
+        # Prepare caption for the uploaded file
+        caption_text = f"Uploaded File: {new_name}\nSize: {humanbytes(filesize)}"
+
+        # Send the Google Drive link to the user
+        button = [
+            [InlineKeyboardButton("☁️ CloudUrl ☁️", url=f"{file_link}")]
+        ]
+        await msg.reply_text(
+            f"File successfully mirrored and uploaded to Google Drive!\n\n"
+            f"Google Drive Link: [View File]({file_link})\n\n"
+            f"Uploaded File: {new_name}\n"
+            f"Size: {humanbytes(filesize)}",
+            reply_markup=InlineKeyboardMarkup(button)
+        )
+
+        # Remove the downloaded file
+        os.remove(downloaded_file)
+        await sts.delete()
+
+        # Deduct video count for non-unlimited users
+        if plan["type"] != "unlimited":
+            await db.update_remaining_count(user_id, plan["remaining"] - 1)
+
+    except Exception as e:
+        await sts.edit(f"Error: {e}")
+
+
+@Client.on_message(filters.command("streamremove") & filters.private)
+async def streamremove(bot, msg):
+    global selected_streams
+    global downloaded
+    global output_filename
+
+    user_id = msg.from_user.id
+
+    # Retrieve the user's plan
+    plan = await db.get_user_plan(user_id)
+
+    if not plan:
+        await msg.reply_text("❗ No plan found. Please subscribe to a plan.")
+        return
+
+    # Check remaining videos based on plan
+    if plan["type"] == "free" and plan["remaining"] <= 0:
+        return await msg.reply_text("❗ You have no remaining videos in your free plan. Please upgrade your plan.")
+
+    # Reply to a message with media
+    reply = msg.reply_to_message
+    if not reply:
+        return await msg.reply_text("❗ Please reply to a media file to remove streams.")
+
+    if len(msg.command) < 3 or msg.command[1] != "-n":
+        return await msg.reply_text("❗ Please provide the filename with the `-n` flag\nFormat: `/streamremove -n filename.mkv`")
+
+    output_filename = " ".join(msg.command[2:]).strip()
+
+    if not output_filename.lower().endswith(('.mkv', '.mp4', '.avi')):
+        return await msg.reply_text("❗ Invalid file extension. Please use a valid video file extension (e.g., .mkv, .mp4, .avi).")
+
+    # Download the media
+    sts = await msg.reply_text("🚀 Downloading media... ⚡")
+    c_time = time.time()
+
+    try:
+        downloaded = await reply.download(progress=progress_message, progress_args=("🚀 Download Started... ⚡", sts, c_time))
+    except Exception as e:
+        await sts.edit(f"❌ Error downloading media: {e}")
+        return
+
+    # Get the available streams using ffprobe
+    ffprobe_cmd = [
+        'ffprobe', '-v', 'error', '-show_entries',
+        'stream=index:stream_tags=language:stream=codec_type',
+        '-of', 'json', downloaded
+    ]
+    process = await asyncio.create_subprocess_exec(
+        *ffprobe_cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await process.communicate()
+
+    if process.returncode != 0:
+        await sts.edit(f"❗ FFprobe error: {stderr.decode('utf-8')}")
+        os.remove(downloaded)
+        return
+
+    # Extract the streams (audio, video, subtitles)
+    streams = json.loads(stdout.decode('utf-8')).get('streams', [])
+    audio_video_streams = []
+    subtitle_streams = []
+
+    for stream in streams:
+        stream_index = stream['index']
+        language = stream.get('tags', {}).get('language', 'unknown')
+        codec_type = stream['codec_type']
+
+        if codec_type == 'audio':
+            audio_video_streams.append(f"{stream_index} 🎵 Audio ({language})")
+        elif codec_type == 'subtitle':
+            subtitle_streams.append(f"{stream_index} 📝 Subtitle ({language})")
+        elif codec_type == 'video':
+            audio_video_streams.append(f"{stream_index} 📹 Video")
+
+    # Create selection buttons for streams
+    buttons = []
+    max_len = max(len(audio_video_streams), len(subtitle_streams))
+    for i in range(max_len):
+        row = []
+        if i < len(audio_video_streams):
+            row.append(
+                InlineKeyboardButton(audio_video_streams[i], callback_data=f"toggle_{audio_video_streams[i].split()[0]}")
+            )
+        if i < len(subtitle_streams):
+            row.append(
+                InlineKeyboardButton(subtitle_streams[i], callback_data=f"toggle_{subtitle_streams[i].split()[0]}")
+            )
+        buttons.append(row)
+
+    buttons.append([InlineKeyboardButton("🔄 Reverse Selection", callback_data="reverse")])
+    buttons.append([
+        InlineKeyboardButton("❌ Cancel", callback_data="cancel"),
+        InlineKeyboardButton("✅ Done", callback_data="done")
+    ])
+
+    markup = InlineKeyboardMarkup(buttons)
+    selected_streams.clear()
+
+    # Ask the user to select streams
+    message = await sts.edit("Select the streams you want to remove (you have 60 seconds):", reply_markup=markup)
+
+    # Wait for 60 seconds or until the user interacts
+    await asyncio.sleep(60)
+
+    try:
+        await message.edit("🕒 Time's up! Selection process has been canceled.")
+        await message.clear_reply_markup()
+    except Exception as e:
+        await sts.edit(f"Error editing message: {e}")
+
+    # Remove the downloaded file after completion or timeout
+    os.remove(downloaded)
+
+    # Deduct video count for non-unlimited users
+    if plan["type"] != "unlimited":
+        await db.update_remaining_count(user_id, plan["remaining"] - 1)
+        
+"""
 @Client.on_message(filters.private & filters.command("mirror"))
 async def mirror_to_google_drive(bot, msg: Message):
    
@@ -251,6 +533,7 @@ async def streamremove(bot, msg):
     if downloaded and os.path.exists(downloaded):
         os.remove(downloaded)
 
+"""
 @Client.on_callback_query(filters.regex(r'toggle_\d+|done|cancel|reverse'))
 async def callback_query_handler(bot, callback_query: CallbackQuery):
     global selected_streams
@@ -366,8 +649,9 @@ async def process_media(bot, callback_query, selected_streams, downloaded, outpu
         os.remove(output_file)
 
     await sts.delete()
-    
-            
+   
+
+        
 
 
 # Command handler for /list
