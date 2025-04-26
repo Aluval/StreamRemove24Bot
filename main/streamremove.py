@@ -16,6 +16,7 @@ import aiohttp
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup,CallbackQuery
 from pyrogram.errors import RPCError, FloodWait
 import asyncio
+from main.ffmpeg import generate_sample_video
 from googleapiclient.http import MediaFileUpload
 from main.gdrive import upload_to_google_drive, extract_id_from_url, copy_file, get_files_in_folder, drive_service
 from googleapiclient.errors import HttpError
