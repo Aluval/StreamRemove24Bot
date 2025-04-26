@@ -44,13 +44,8 @@ class Database:
         default_settings = {
             'sample_video_duration': "Not set",
             'screenshots': "Not set",
-            'thumbnail_path': None,
-            'gofile_api_key': None,
-            'gdrive_folder_id': None,
-            'metadata_titles': {
-                'video_title': '',
-                'audio_title': '',
-                'subtitle_title': ''
+            'thumbnail_path': None,        
+            'gdrive_folder_id': None,            
             }
         }
         user = await self.users_col.find_one({'id': user_id})
