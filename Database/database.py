@@ -67,7 +67,7 @@ class Database:
     async def delete_thumbnail(self, user_id):
         await self.files_col.update_one({'id': user_id}, {'$unset': {'thumbnail_file_id': ""}})
 
-   async def save_screenshot_paths(self, user_id, screenshot_paths):
+    async def save_screenshot_paths(self, user_id, screenshot_paths):
         result = await self.users_col.update_one(
             {'_id': user_id},
             {'$set': {'screenshot_paths': screenshot_paths}},
