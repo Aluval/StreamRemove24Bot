@@ -674,31 +674,153 @@ async def closed(bot, msg):
 async def sunrises24_bot_updates_callback(_, callback_query):
     await callback_query.answer("MADE BY @SUNRISES24BOTUPDATES ❤️", show_alert=True)    
     
-@Client.on_message(filters.private & filters.command("gdriveid"))
-async def setup_gdrive_id(bot, msg: Message):
+@Client.on_message(filters.command("screenshots") & filters.private)
+async def screenshots_command(client, message: Message):
+    user_id = message.from_user.id
+
+    # Fetch user settings for screenshots count
+    num_screenshots = await db.get_screenshots_count(user_id)
+    if not num_screenshots:
+        num_screenshots = 5  # Default to 5 if not set
+
+    if not message.reply_to_message:
+        return await message.reply_text("Please reply to a valid video file or document.")
+
+    media = message.reply_to_message.video or message.reply_to_message.document
+    if not media:
+        return await message.reply_text("Please reply to a valid video file.")
+
+    sts = await message.reply_text("🚀 Downloading media... ⚡")
+    try:
+        input_path = await client.download_media(media)
+    except Exception as e:
+        await sts.edit(f"Error downloading media: {e}")
+        return
+
+    if not os.path.exists(input_path):
+        await sts.edit("Error: The downloaded file does not exist.")
+        return
+
+    try:
+        await sts.edit("🚀 Reading video duration... ⚡")
+        command = ['ffprobe', '-i', input_path, '-show_entries', 'format=duration', '-v', 'quiet', '-of', 'csv=p=0']
+        duration_output = subprocess.check_output(command, stderr=subprocess.STDOUT)
+        duration = float(duration_output.decode('utf-8').strip())
+    except subprocess.CalledProcessError as e:
+        await sts.edit(f"Error reading video duration: {e.output.decode('utf-8')}")
+        os.remove(input_path)
+        return
+    except ValueError:
+        await sts.edit("Error reading video duration: Unable to convert duration to float.")
+        os.remove(input_path)
+        return
+
+    interval = duration / num_screenshots
+
+    await sts.edit(f"🚀 Generating {num_screenshots} screenshots... ⚡")
+    screenshot_paths = []
+    for i in range(num_screenshots):
+        time_position = interval * i
+        screenshot_path = f"screenshot_{user_id}_{i}.jpg"
+
+        command = ['ffmpeg', '-ss', str(time_position), '-i', input_path, '-vframes', '1', '-y', screenshot_path]
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = process.communicate()
+
+        if process.returncode != 0:
+            await sts.edit(f"Error generating screenshot {i+1}: {stderr.decode('utf-8')}")
+            for path in screenshot_paths:
+                os.remove(path)
+            os.remove(input_path)
+            return
+
+        screenshot_paths.append(screenshot_path)
+
+        # Upload screenshot to user's PM
+        try:
+            await client.send_photo(chat_id=user_id, photo=screenshot_path)
+        except Exception as e:
+            await sts.edit(f"Error uploading screenshot {i+1}: {e}")
+            os.remove(screenshot_path)
+
+        os.remove(screenshot_path)  # Remove local screenshot after uploading
+
+    # Save screenshot paths to database
+    await db.save_screenshot_paths(user_id, screenshot_paths)
+
+    os.remove(input_path)  # Remove downloaded media file
+
+    # Send notification in group chat
+    try:
+        await message.reply_text("📸 Screenshots have been sent to your PM.")
+    except Exception as e:
+        print(f"Failed to send notification: {e}")
+
+    # Cleanup: Delete screenshot paths from database after sending
+    await db.delete_screenshot_paths(user_id)
+
+    await sts.delete()  # Delete the status message after completion
+
+
+@Client.on_message(filters.command("samplevideo") & filters.private)
+async def sample_video(bot, msg):
     user_id = msg.from_user.id
-    args = msg.text.split(" ", 1)
-    if len(args) != 2:
-        return await msg.reply_text("Usage: /gdriveid {your_gdrive_folder_id}")
-    
-    gdrive_folder_id = args[1].strip()
-    
-    # Save Google Drive folder ID to the database
-    await db.save_gdrive_folder_id(user_id, gdrive_folder_id)
-    
-    await msg.reply_text(f"Google Drive folder ID set to: {gdrive_folder_id} for user `{user_id}`\n\nGoogle Drive folder ID set successfully✅!")
 
+    # Fetch user settings
+    sample_video_duration = await db.get_sample_video_duration(user_id)
 
-@Client.on_callback_query(filters.regex("^preview_gdrive$"))
-async def inline_preview_gdrive(bot, callback_query):
-    user_id = callback_query.from_user.id
-    
-    # Retrieve Google Drive folder ID from the database
-    gdrive_folder_id = await db.get_gdrive_folder_id(user_id)
-    
-    if not gdrive_folder_id:
-        return await callback_query.message.reply_text(f"Google Drive Folder ID is not set for user `{user_id}`. Use /gdriveid {{your_gdrive_folder_id}} to set it.")
-    
-    await callback_query.message.reply_text(f"Current Google Drive Folder ID for user `{user_id}`: {gdrive_folder_id}")
-    
+    if sample_video_duration is None:
+        return await msg.reply_text("Please set a valid sample video duration using /usersettings.")
 
+    if not msg.reply_to_message:
+        return await msg.reply_text("Please reply to a valid video file or document.")
+
+    media = msg.reply_to_message.video or msg.reply_to_message.document
+    if not media:
+        return await msg.reply_text("Please reply to a valid video file or document.")
+
+    sts = await msg.reply_text("🚀 Downloading media... ⚡")
+    c_time = time.time()
+    try:
+        input_path = await bot.download_media(media, progress=progress_message, progress_args=("🚀 Downloading media... ⚡️", sts, c_time))
+    except Exception as e:
+        await sts.edit(f"Error downloading media: {e}")
+        return
+
+    output_file = f"sample_video_{sample_video_duration}s.mp4"
+
+    await sts.edit("🚀 Processing sample video... ⚡")
+    try:
+        generate_sample_video(input_path, sample_video_duration, output_file)
+    except Exception as e:
+        await sts.edit(f"Error generating sample video: {e}")
+        os.remove(input_path)
+        return
+
+    filesize = os.path.getsize(output_file)
+    filesize_human = humanbytes(filesize)
+    cap = f"{os.path.basename(output_file)}\n\n🌟 Size: {filesize_human}"
+
+    await sts.edit("💠 Uploading sample video to your PM... ⚡")
+    c_time = time.time()
+    try:
+        await bot.send_document(
+            user_id, 
+            document=output_file, 
+            caption=cap, 
+            progress=progress_message, 
+            progress_args=("💠 Upload Started... ⚡️", sts, c_time)
+        )
+        # Save sample video settings to database
+        await db.save_sample_video_settings(user_id, sample_video_duration, "Not set")
+
+        # Send notification about the file upload
+        await msg.reply_text(f"File Sample Video has been uploaded to your PM. Check your PM of the bot ✅ .")
+
+    except Exception as e:
+        await sts.edit(f"Error uploading sample video: {e}")
+        return
+
+    os.remove(input_path)
+    os.remove(output_file)
+    await sts.delete()
