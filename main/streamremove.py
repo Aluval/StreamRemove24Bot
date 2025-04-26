@@ -118,168 +118,256 @@ async def mirror_to_google_drive(bot, msg: Message):
         await sts.edit(f"Error: {e}")
             
 
-selected_streams = set() 
-downloaded = None 
-output_filename = "" 
-FILE_SIZE_LIMIT = 2 * 1024 * 1024 * 1024  # 2GB as example
+import asyncio
+import json
+import os
+import time
 
-@Client.on_message(filters.command("streamremove") & filters.private) 
-async def streamremove(bot, msg): global selected_streams, downloaded, output_filename
-reply = msg.reply_to_message
-if not reply:
-    return await msg.reply_text("❗ Please reply to a media file with the command\nFormat: `/streamremove -n filename.mkv`")
+from pyrogram import Client, filters
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 
-if len(msg.command) < 3 or msg.command[1] != "-n":
-    return await msg.reply_text("Please provide the filename with the `-n` flag\nFormat: `/streamremove -n filename.mkv`")
+selected_streams = set()
+downloaded = None
+output_filename = None
 
-output_filename = " ".join(msg.command[2:]).strip()
+# Define your constants
+FILE_SIZE_LIMIT = 2 * 1024 * 1024 * 1024  # 2 GB Limit (Change if you want)
 
-if not output_filename.lower().endswith((".mkv", ".mp4", ".avi")):
-    return await msg.reply_text("Invalid file extension. Please use a valid video file extension (e.g., .mkv, .mp4, .avi).")
 
-media = reply.document or reply.audio or reply.video
-if not media:
-    return await msg.reply_text("❗ Please reply to a valid media file (audio, video, or document) with the command.")
+async def safe_edit_message(message, text):
+    try:
+        await message.edit(text)
+    except Exception:
+        pass
 
-sts = await msg.reply_text("🚀 Downloading media... ⚡")
-c_time = time.time()
-try:
-    downloaded = await reply.download()
-except Exception as e:
-    await sts.edit(f"❌ Error downloading media: {e}")
-    return
+@Client.on_message(filters.command("streamremove") & filters.private)
+async def streamremove(bot, msg):
+    global selected_streams
+    global downloaded
+    global output_filename
 
-ffprobe_cmd = [
-    'ffprobe', '-v', 'error', '-show_entries', 'stream=index:stream_tags=language:stream=codec_type', '-of', 'json', downloaded
-]
-process = await asyncio.create_subprocess_exec(*ffprobe_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-stdout, stderr = await process.communicate()
+    reply = msg.reply_to_message
+    if not reply:
+        return await msg.reply_text(
+            "❗ Please reply to a media file with the command\nFormat: `/streamremove -n filename.mkv`"
+        )
 
-if process.returncode != 0:
-    await sts.edit(f"❗ FFprobe error: {stderr.decode('utf-8')}")
-    os.remove(downloaded)
-    return
+    if len(msg.command) < 3 or msg.command[1] != "-n":
+        return await msg.reply_text(
+            "Please provide the filename with the `-n` flag\nFormat: `/streamremove -n filename.mkv`"
+        )
 
-streams = json.loads(stdout.decode('utf-8')).get('streams', [])
-audio_video_streams = []
-subtitle_streams = []
+    output_filename = " ".join(msg.command[2:]).strip()
 
-for stream in streams:
-    index = stream['index']
-    language = stream.get('tags', {}).get('language', 'unknown')
-    codec_type = stream['codec_type']
+    if not output_filename.lower().endswith(('.mkv', '.mp4', '.avi')):
+        return await msg.reply_text(
+            "Invalid file extension. Please use a valid video file extension (e.g., .mkv, .mp4, .avi)."
+        )
 
-    if codec_type == 'audio':
-        audio_video_streams.append(f"{index} 🎵 Audio - {language}")
-    elif codec_type == 'video':
-        audio_video_streams.append(f"{index} 📹 Video")
-    elif codec_type == 'subtitle':
-        subtitle_streams.append(f"{index} 📝 Subtitle - {language}")
+    media = reply.document or reply.audio or reply.video
+    if not media:
+        return await msg.reply_text(
+            "❗ Please reply to a valid media file (audio, video, or document) with the command."
+        )
 
-buttons = []
-max_len = max(len(audio_video_streams), len(subtitle_streams))
-for i in range(max_len):
-    row = []
-    if i < len(audio_video_streams):
-        row.append(InlineKeyboardButton(audio_video_streams[i], callback_data=f"toggle_{audio_video_streams[i].split()[0]}"))
-    if i < len(subtitle_streams):
-        row.append(InlineKeyboardButton(subtitle_streams[i], callback_data=f"toggle_{subtitle_streams[i].split()[0]}"))
-    buttons.append(row)
+    sts = await msg.reply_text("🚀 Downloading media... ⚡")
+    c_time = time.time()
 
-buttons.append([InlineKeyboardButton("🔄 Reverse Selection", callback_data="reverse")])
-buttons.append([InlineKeyboardButton("❌ Cancel", callback_data="cancel"), InlineKeyboardButton("✅ Done", callback_data="done")])
+    try:
+        downloaded = await reply.download(progress=progress_message, progress_args=("🚀 Download Started... ⚡", sts, c_time))
+    except Exception as e:
+        await sts.edit(f"❌ Error downloading media: {e}")
+        return
 
-markup = InlineKeyboardMarkup(buttons)
+    # Get the available streams using ffprobe
+    ffprobe_cmd = [
+        'ffprobe', '-v', 'error', '-show_entries',
+        'stream=index:stream_tags=language:stream=codec_type',
+        '-of', 'json', downloaded
+    ]
+    process = await asyncio.create_subprocess_exec(
+        *ffprobe_cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await process.communicate()
 
-selected_streams.clear()
-await sts.edit("Select the streams you want to remove (you have 60 seconds):", reply_markup=markup)
+    if process.returncode != 0:
+        await sts.edit(f"❗ FFprobe error: {stderr.decode('utf-8')}")
+        os.remove(downloaded)
+        return
 
-@Client.on_callback_query(filters.regex(r'toggle_\d+|done|cancel|reverse')) 
-async def callback_query_handler(bot, callback_query: CallbackQuery): 
-    global selected_streams, downloaded, output_filename 
-    data = callback_query.data
+    streams = json.loads(stdout.decode('utf-8')).get('streams', [])
+    audio_video_streams = []
+    subtitle_streams = []
 
-if not callback_query.message.reply_to_message or callback_query.from_user.id != callback_query.message.reply_to_message.from_user.id:
-    return
+    for stream in streams:
+        stream_index = stream['index']
+        language = stream.get('tags', {}).get('language', 'unknown')
+        codec_type = stream['codec_type']
 
-if data == "cancel":
-    await callback_query.message.edit_text("❌ Cancelled.")
+        if codec_type == 'audio':
+            audio_video_streams.append(f"{stream_index} 🎵 Audio ({language})")
+        elif codec_type == 'subtitle':
+            subtitle_streams.append(f"{stream_index} 📝 Subtitle ({language})")
+        elif codec_type == 'video':
+            audio_video_streams.append(f"{stream_index} 📹 Video")
+
+    # Build the inline keyboard
+    buttons = []
+    max_len = max(len(audio_video_streams), len(subtitle_streams))
+    for i in range(max_len):
+        row = []
+        if i < len(audio_video_streams):
+            row.append(
+                InlineKeyboardButton(audio_video_streams[i], callback_data=f"toggle_{audio_video_streams[i].split()[0]}")
+            )
+        if i < len(subtitle_streams):
+            row.append(
+                InlineKeyboardButton(subtitle_streams[i], callback_data=f"toggle_{subtitle_streams[i].split()[0]}")
+            )
+        buttons.append(row)
+
+    buttons.append([InlineKeyboardButton("🔄 Reverse Selection", callback_data="reverse")])
+    buttons.append([
+        InlineKeyboardButton("❌ Cancel", callback_data="cancel"),
+        InlineKeyboardButton("✅ Done", callback_data="done")
+    ])
+
+    markup = InlineKeyboardMarkup(buttons)
+    selected_streams.clear()
+
+    message = await sts.edit("Select the streams you want to remove (you have 60 seconds):", reply_markup=markup)
+
+    await asyncio.sleep(60)
+
+    try:
+        await message.edit("🕒 Time's up! Selection process has been canceled.")
+        await asyncio.sleep(5)
+        await message.delete()
+    except:
+        pass
+
     if downloaded and os.path.exists(downloaded):
         os.remove(downloaded)
-    return
 
-if data == "reverse":
-    all_indices = {
-        btn.callback_data.split("_")[1]
-        for row in callback_query.message.reply_markup.inline_keyboard
-        for btn in row
-        if btn.callback_data.startswith("toggle_")
-    }
-    selected_streams.symmetric_difference_update(all_indices)
+@Client.on_callback_query(filters.regex(r'toggle_\d+|done|cancel|reverse'))
+async def callback_query_handler(bot, callback_query: CallbackQuery):
+    global selected_streams
+    global downloaded
+    global output_filename
 
-elif data.startswith("toggle_"):
-    idx = data.split("_")[1]
-    if idx in selected_streams:
-        selected_streams.remove(idx)
+    data = callback_query.data
+
+    if data == "cancel":
+        await callback_query.message.delete()
+        if downloaded and os.path.exists(downloaded):
+            os.remove(downloaded)
+        return
+
+    if data == "reverse":
+        buttons = callback_query.message.reply_markup.inline_keyboard
+        all_indices = {btn.callback_data.split('_')[1] for row in buttons for btn in row if btn.callback_data.startswith('toggle_')}
+        selected_streams.symmetric_difference_update(all_indices)
+
+        for row in buttons:
+            for button in row:
+                if button.callback_data.startswith("toggle_"):
+                    index = button.callback_data.split('_')[1]
+                    if index in selected_streams:
+                        button.text = f"✅ {button.text.lstrip('✅').strip()}"
+                    else:
+                        button.text = button.text.lstrip('✅').strip()
+
+        await callback_query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
+        return
+
+    if data == "done":
+        sts = await callback_query.message.edit_text("💠 Removing selected streams... ⚡")
+        await process_media(bot, callback_query, selected_streams, downloaded, output_filename, sts)
+        return
+
+    index = data.split('_')[1]
+    if index in selected_streams:
+        selected_streams.remove(index)
     else:
-        selected_streams.add(idx)
+        selected_streams.add(index)
 
-elif data == "done":
-    sts = await callback_query.message.edit_text("💠 Removing selected streams... ⚡")
-    await process_media(bot, callback_query, selected_streams, downloaded, output_filename, sts)
-    return
+    buttons = callback_query.message.reply_markup.inline_keyboard
+    for row in buttons:
+        for button in row:
+            if button.callback_data == f"toggle_{index}":
+                if button.text.startswith("✅"):
+                    button.text = button.text[2:]
+                else:
+                    button.text = f"✅ {button.text}"
+                break
 
-# Rebuild UI
-buttons = []
-for row in callback_query.message.reply_markup.inline_keyboard:
-    new_row = []
-    for btn in row:
-        if btn.callback_data.startswith("toggle_"):
-            idx = btn.callback_data.split("_")[1]
-            label = btn.text.lstrip("✅").strip()
-            if idx in selected_streams:
-                label = f"✅ {label}"
-            new_row.append(InlineKeyboardButton(label, callback_data=btn.callback_data))
-        else:
-            new_row.append(btn)
-    buttons.append(new_row)
+    await callback_query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
 
-await callback_query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
+async def process_media(bot, callback_query, selected_streams, downloaded, output_filename, sts):
+    user_id = callback_query.from_user.id
+    output_file = output_filename
 
-async def process_media(bot, callback_query, selected_streams, downloaded, output_filename, sts): 
-    output_file = output_filename 
-    ffmpeg_cmd = ['ffmpeg', '-i', downloaded]
+    ffmpeg_cmd = ['ffmpeg', '-i', downloaded, '-map', '0']
+    for idx in selected_streams:
+        ffmpeg_cmd.extend(['-map', f'-0:{idx}'])
+    ffmpeg_cmd.extend(['-c', 'copy', output_file, '-y'])
 
-for idx in selected_streams:
-    ffmpeg_cmd.extend(['-map', f'-0:{idx}'])
+    process = await asyncio.create_subprocess_exec(
+        *ffmpeg_cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await process.communicate()
 
-ffmpeg_cmd.extend(['-map', '0', '-c', 'copy', output_file, '-y'])
+    if process.returncode != 0:
+        await safe_edit_message(sts, f"❗ FFmpeg error: {stderr.decode('utf-8')}")
+        os.remove(downloaded)
+        if os.path.exists(output_file):
+            os.remove(output_file)
+        return
 
-process = await asyncio.create_subprocess_exec(
-    *ffmpeg_cmd,
-    stdout=asyncio.subprocess.PIPE,
-    stderr=asyncio.subprocess.PIPE
-)
-stdout, stderr = await process.communicate()
+    filesize = os.path.getsize(output_file)
+    filesize_human = humanbytes(filesize)
 
-if process.returncode != 0:
-    await sts.edit(f"❗ FFmpeg error:\n```{stderr.decode('utf-8')}```")
-    if os.path.exists(downloaded): os.remove(downloaded)
-    if os.path.exists(output_file): os.remove(output_file)
-    return
+    await safe_edit_message(sts, "💠 Uploading... ⚡")
+    c_time = time.time()
 
-await bot.send_document(
-    chat_id=callback_query.from_user.id,
-    document=output_file,
-    caption=f"✅ Stream removed and file ready: {output_filename}"
-)
+    if filesize > FILE_SIZE_LIMIT:
+        file_link = await upload_to_google_drive(output_file, output_filename, sts)
+        button = [[InlineKeyboardButton("☁️ CloudUrl ☁️", url=file_link)]]
+        await bot.send_message(
+            chat_id=user_id,
+            text=(
+                f"**File stream removed and uploaded to Google Drive!**\n\n"
+                f"[Google Drive Link]({file_link})\n\n"
+                f"**Size:** {filesize_human}"
+            ),
+            reply_markup=InlineKeyboardMarkup(button)
+        )
+    else:
+        await bot.send_document(
+            chat_id=user_id,
+            document=output_file,
+            caption=f"**Processed File:** {output_filename}\n**Size:** {filesize_human}",
+            progress=progress_message,
+            progress_args=("💠 Upload Started... ⚡", sts, c_time)
+        )
 
-if os.path.exists(downloaded): os.remove(downloaded)
-if os.path.exists(output_file): os.remove(output_file)
-await sts.delete()
+    await bot.send_message(
+        chat_id=LOG_CHANNEL,
+        text=f"✅ File `{output_filename}` processed and sent to user {callback_query.from_user.mention}."
+    )
 
+    if downloaded and os.path.exists(downloaded):
+        os.remove(downloaded)
+    if output_file and os.path.exists(output_file):
+        os.remove(output_file)
 
-
+    await sts.delete()
+    
+            
 
 
 # Command handler for /list
