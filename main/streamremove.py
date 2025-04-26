@@ -28,22 +28,179 @@ from Database.database import db
 from pymongo.errors import PyMongoError
 
 #varibles for streameremove
+
 selected_streams = set()
 downloaded = None
+output_filename = None
 
+# Define your constants
+FILE_SIZE_LIMIT = 2 * 1024 * 1024 * 1024  # 2 GB Limit (Change if you want)
 output_filename = ""
+
+
+@Client.on_callback_query(filters.regex("^set_sample_video_duration_"))
+async def set_sample_video_duration(client, callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    duration_str = callback_query.data.split("_")[-1]
+    duration = int(duration_str)
+    
+    # Save sample video duration to database
+    await db.save_sample_video_settings(user_id, duration, "screenshots setting")  # Adjusted the parameter from 'duration' to 'duration_str'
+    
+    await callback_query.answer(f"Sample video duration set to {duration} seconds.")
+    await display_user_settings(client, callback_query.message, edit=True)
+
+
+@Client.on_callback_query(filters.regex("^sample_video_option$"))
+async def sample_video_option(client, callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    current_duration = await db.get_sample_video_settings(user_id)
+    
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(f"Sample Video 150s {'✅' if current_duration == 150 else ''}", callback_data="set_sample_video_duration_150")],
+        [InlineKeyboardButton(f"Sample Video 120s {'✅' if current_duration == 120 else ''}", callback_data="set_sample_video_duration_120")],
+        [InlineKeyboardButton(f"Sample Video 90s {'✅' if current_duration == 90 else ''}", callback_data="set_sample_video_duration_90")],
+        [InlineKeyboardButton(f"Sample Video 60s {'✅' if current_duration == 60 else ''}", callback_data="set_sample_video_duration_60")],
+        [InlineKeyboardButton(f"Sample Video 30s {'✅' if current_duration == 30 else ''}", callback_data="set_sample_video_duration_30")],
+        [InlineKeyboardButton("Back", callback_data="back_to_settings")]
+    ])
+    
+    await callback_query.message.edit_text(f"Sample Video Duration Settings\nCurrent duration: {current_duration}", reply_markup=keyboard)
+  
+
+# Callback query handler for returning to user settings
+@Client.on_callback_query(filters.regex("^back_to_settings$"))
+async def back_to_settings(client, callback_query: CallbackQuery):
+    await display_user_settings(client, callback_query.message, edit=True)
 
 @Client.on_message(filters.private & filters.command("usersettings"))
 async def display_user_settings(client, msg, edit=False):
     user_id = msg.from_user.id
     
+    current_duration = await db.get_sample_video_duration(user_id)
+    current_screenshots = await db.get_screenshots_count(user_id)
+
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Sunrises24 Bot Updates 💠", callback_data="sunrises24_bot_updates")],
-        [InlineKeyboardButton("View Google Drive Folder ID 📂", callback_data="preview_gdrive")],
+        [InlineKeyboardButton("💠", callback_data="sunrises24_bot_updates")],
+        [InlineKeyboardButton("Sample Video Settings 🎞️", callback_data="sample_video_option")],
+        [InlineKeyboardButton("Screenshots Settings 📸", callback_data="screenshots_option")],
+        [InlineKeyboardButton("Thumbnail Settings 📄", callback_data="thumbnail_settings")],       
+        [InlineKeyboardButton("💠", callback_data="sunrises24_bot_updates")],
         [InlineKeyboardButton("Close ❌", callback_data="del")]
     ])
     
-    await msg.reply("Here are your settings:", reply_markup=keyboard)
+    if edit:
+        await msg.edit_text(f"User Settings\nCurrent sample video duration: {current_duration}\nCurrent screenshots setting: {current_screenshots}", reply_markup=keyboard)
+    else:
+        await msg.reply(f"User Settings\nCurrent sample video duration: {current_duration}\nCurrent screenshots setting: {current_screenshots}", reply_markup=keyboard)
+
+@Client.on_callback_query(filters.regex("^screenshots_option$"))
+async def screenshots_option(client, callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    current_screenshots = await db.get_screenshots_count(user_id)  # Default to 5 if not set
+    
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(f"Screenshots 1 {'✅' if current_screenshots == 1 else ''}", callback_data="set_screenshots_1")],
+        [InlineKeyboardButton(f"Screenshots 2 {'✅' if current_screenshots == 2 else ''}", callback_data="set_screenshots_2")],
+        [InlineKeyboardButton(f"Screenshots 3 {'✅' if current_screenshots == 3 else ''}", callback_data="set_screenshots_3")],
+        [InlineKeyboardButton(f"Screenshots 4 {'✅' if current_screenshots == 4 else ''}", callback_data="set_screenshots_4")],
+        [InlineKeyboardButton(f"Screenshots 5 {'✅' if current_screenshots == 5 else ''}", callback_data="set_screenshots_5")],
+        [InlineKeyboardButton(f"Screenshots 6 {'✅' if current_screenshots == 6 else ''}", callback_data="set_screenshots_6")],
+        [InlineKeyboardButton(f"Screenshots 7 {'✅' if current_screenshots == 7 else ''}", callback_data="set_screenshots_7")],
+        [InlineKeyboardButton(f"Screenshots 8 {'✅' if current_screenshots == 8 else ''}", callback_data="set_screenshots_8")],
+        [InlineKeyboardButton(f"Screenshots 9 {'✅' if current_screenshots == 9 else ''}", callback_data="set_screenshots_9")],
+        [InlineKeyboardButton(f"Screenshots 10 {'✅' if current_screenshots == 10 else ''}", callback_data="set_screenshots_10")],
+        [InlineKeyboardButton("Back", callback_data="back_to_settings")]
+    ])
+    
+    await callback_query.message.edit_text(f"Screenshots Settings\nCurrent number: {current_screenshots}", reply_markup=keyboard)
+    
+@Client.on_callback_query(filters.regex("^set_screenshots_"))
+async def set_screenshots(client, callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    num_str = callback_query.data.split("_")[-1]
+    num_screenshots = int(num_str)
+    
+    # Save screenshots count to database
+    await db.save_screenshots_count(user_id, num_screenshots)
+    
+    await callback_query.answer(f"Number of screenshots set to {num_screenshots}.")
+    await display_user_settings(client, callback_query.message, edit=True)
+
+@Client.on_callback_query(filters.regex("^thumbnail_settings$"))
+async def inline_thumbnail_settings(client, callback_query: CallbackQuery):
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[            
+            [InlineKeyboardButton("View Thumbnail", callback_data="view_thumbnail")],
+            [InlineKeyboardButton("Delete Thumbnail", callback_data="delete_thumbnail")],
+            [InlineKeyboardButton("Back to Settings", callback_data="back_to_settings")]
+        ]
+    )
+    await callback_query.message.edit_text("Thumbnail Settings:", reply_markup=keyboard)
+
+@Client.on_message(filters.private & filters.command("setthumbnail"))
+async def set_thumbnail_command(client, message):
+    user_id = message.from_user.id
+
+    # Check if thumbnail already exists
+    thumbnail_file_id = await db.get_thumbnail(user_id)
+    if thumbnail_file_id:
+        await message.reply("You already have a permanent thumbnail set. Send a new photo to update it.")
+    else:
+        await message.reply("Send a photo to set as your permanent thumbnail.")
+
+@Client.on_message(filters.photo & filters.private)
+async def set_thumbnail_handler(client, message):
+    user_id = message.from_user.id
+    photo_file_id = message.photo.file_id
+
+    # Save thumbnail file ID to database
+    await db.save_thumbnail(user_id, photo_file_id)
+    
+    await message.reply("Your permanent thumbnail is updated. If the bot is restarted, the new thumbnail will be preserved.")
+    
+@Client.on_callback_query(filters.regex("^view_thumbnail$"))
+async def view_thumbnail(client, callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    thumbnail_file_id = await db.get_thumbnail(user_id)
+
+    if not thumbnail_file_id:
+        await callback_query.message.reply_text("You don't have any thumbnail.")
+        return
+
+    try:
+        await callback_query.message.reply_photo(photo=thumbnail_file_id, caption="This is your current thumbnail")
+    except Exception as e:
+        await callback_query.message.reply_text("An error occurred while trying to view your thumbnail.")
+
+@Client.on_callback_query(filters.regex("^delete_thumbnail$"))
+async def delete_thumbnail(client, callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    thumbnail_file_id = await db.get_thumbnail(user_id)
+
+    try:
+        if thumbnail_file_id:
+            await db.delete_thumbnail(user_id)
+            await callback_query.message.reply_text("Your thumbnail was removed ❌")
+        else:
+            await callback_query.message.reply_text("You don't have any thumbnail ‼️")
+    except Exception as e:
+        await callback_query.message.reply_text("An error occurred while trying to remove your thumbnail. Please try again later.")
+
+
+
+@Client.on_callback_query(filters.regex("^preview_gdrive$"))
+async def inline_preview_gdrive(bot, callback_query):
+    user_id = callback_query.from_user.id
+    
+    # Retrieve Google Drive folder ID from the database
+    gdrive_folder_id = await db.get_gdrive_folder_id(user_id)
+    
+    if not gdrive_folder_id:
+        return await callback_query.message.reply_text(f"Google Drive Folder ID is not set for user `{user_id}`. Use /gdriveid {{your_gdrive_folder_id}} to set it.")
+    
+    await callback_query.message.reply_text(f"Current Google Drive Folder ID for user `{user_id}`: {gdrive_folder_id}")
+    
 
 
 @Client.on_message(filters.private & filters.command("mirror"))
@@ -119,20 +276,7 @@ async def mirror_to_google_drive(bot, msg: Message):
         await sts.edit(f"Error: {e}")
             
 
-import asyncio
-import json
-import os
-import time
 
-from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
-
-selected_streams = set()
-downloaded = None
-output_filename = None
-
-# Define your constants
-FILE_SIZE_LIMIT = 2 * 1024 * 1024 * 1024  # 2 GB Limit (Change if you want)
 
 
 async def safe_edit_message(message, text):
