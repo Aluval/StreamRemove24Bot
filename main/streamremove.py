@@ -578,7 +578,7 @@ async def process_media(bot, callback_query, selected_streams, downloaded, outpu
     ffmpeg_cmd = ['ffmpeg', '-i', downloaded, '-map', '0']
     for idx in selected_streams:
         ffmpeg_cmd.extend(['-map', f'-0:{idx}'])
-    ffmpeg_cmd.extend(['-c', 'copy', output_file, '-y')
+    ffmpeg_cmd.extend(['-c', 'copy', output_file, '-y'])
 
     process = await asyncio.create_subprocess_exec(
         *ffmpeg_cmd,
