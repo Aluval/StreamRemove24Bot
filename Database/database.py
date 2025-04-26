@@ -35,7 +35,49 @@ class Database:
         # Drop all collections
         await self.users_col.drop()
 
+    async def update_user_settings(self, user_id, settings):
+        await self.users_col.update_one({'id': user_id}, {'$set': {'settings': settings}}, upsert=True)
+        
+    async def get_user_settings(self, user_id):
+        default_settings = {
+            'sample_video_duration': "Not set",
+            'screenshots': "Not set",
+            'thumbnail_path': None,
+            'gofile_api_key': None,
+            'gdrive_folder_id': None,
+            'metadata_titles': {
+                'video_title': '',
+                'audio_title': '',
+                'subtitle_title': ''
+            }
+        }
+        user = await self.users_col.find_one({'id': user_id})
+        if user:
+            return user.get('settings', default_settings)
+        return default_settings
+       
 
+    
+            
+    async def save_sample_video_settings(self, user_id, sample_video_duration, screenshots):
+        await self.users_col.update_one(
+            {'id': user_id}, 
+            {'$set': {
+                'settings.sample_video_duration': sample_video_duration,
+                'settings.screenshots': screenshots
+            }},
+            upsert=True
+        )
+
+    async def get_sample_video_settings(self, user_id):
+        user = await self.users_col.find_one({'id': user_id})
+        if user:
+            settings = user.get('settings', {})
+            sample_video_duration = settings.get('sample_video_duration', "Not set")
+            screenshots = settings.get('screenshots', "Not set")
+            return sample_video_duration, screenshots
+        return "Not set", "Not set"
+        
     async def save_screenshots_count(self, user_id, screenshots_count):
         await self.users_col.update_one(
             {'id': user_id},
