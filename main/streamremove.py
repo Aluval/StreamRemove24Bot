@@ -395,7 +395,7 @@ async def streamremove(bot, msg):
 
     if downloaded and os.path.exists(downloaded):
         os.remove(downloaded)
-
+"""
 
 @Client.on_callback_query(filters.regex(r'toggle_\d+|done|cancel|reverse'))
 async def callback_query_handler(bot, callback_query: CallbackQuery):
@@ -513,9 +513,145 @@ async def process_media(bot, callback_query, selected_streams, downloaded, outpu
 
     await sts.delete()
    
-
+"""
         
+@Client.on_callback_query(filters.regex(r'toggle_\d+|done|cancel|reverse'))
+async def callback_query_handler(bot, callback_query: CallbackQuery):
+    global selected_streams
+    global downloaded
+    global output_filename
 
+    data = callback_query.data
+
+    if data == "cancel":
+        await callback_query.message.delete()
+        if downloaded and os.path.exists(downloaded):
+            os.remove(downloaded)
+        return
+
+    if data == "reverse":
+        buttons = callback_query.message.reply_markup.inline_keyboard
+        all_indices = {btn.callback_data.split('_')[1] for row in buttons for btn in row if btn.callback_data.startswith('toggle_')}
+        selected_streams.symmetric_difference_update(all_indices)
+
+        for row in buttons:
+            for button in row:
+                if button.callback_data.startswith("toggle_"):
+                    index = button.callback_data.split('_')[1]
+                    if index in selected_streams:
+                        button.text = f"✅ {button.text.lstrip('✅').strip()}"
+                    else:
+                        button.text = button.text.lstrip('✅').strip()
+
+        await callback_query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
+        return
+
+    if data == "done":
+        sts = await callback_query.message.edit_text("💠 Removing selected streams... ⚡")
+        await process_media(bot, callback_query, selected_streams, downloaded, output_filename, sts)
+        return
+
+    # toggle streams
+    index = data.split('_')[1]
+    if index in selected_streams:
+        selected_streams.remove(index)
+    else:
+        selected_streams.add(index)
+
+    buttons = callback_query.message.reply_markup.inline_keyboard
+    for row in buttons:
+        for button in row:
+            if button.callback_data == f"toggle_{index}":
+                if button.text.startswith("✅"):
+                    button.text = button.text[2:]
+                else:
+                    button.text = f"✅ {button.text}"
+                break
+
+    await callback_query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
+
+
+async def process_media(bot, callback_query, selected_streams, downloaded, output_filename, sts):
+    user_id = callback_query.from_user.id
+    output_file = output_filename
+
+    ffmpeg_cmd = ['ffmpeg', '-i', downloaded, '-map', '0']
+    for idx in selected_streams:
+        ffmpeg_cmd.extend(['-map', f'-0:{idx}'])
+    ffmpeg_cmd.extend(['-c', 'copy', output_file, '-y')
+
+    process = await asyncio.create_subprocess_exec(
+        *ffmpeg_cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await process.communicate()
+
+    if process.returncode != 0:
+        await safe_edit_message(sts, f"❗ FFmpeg error: {stderr.decode('utf-8')}")
+        os.remove(downloaded)
+        if os.path.exists(output_file):
+            os.remove(output_file)
+        return
+
+    # --- Thumbnail setup ---
+    file_thumb = None
+    try:
+        thumbnail_file_id = await db_get_thumbnail(user_id)  # Assume db_get_thumbnail exists
+        if thumbnail_file_id:
+            file_thumb = await bot.download_media(thumbnail_file_id)
+    except Exception:
+        pass
+
+    filesize = os.path.getsize(output_file)
+    filesize_human = humanbytes(filesize)
+    caption_text = f"**Processed File:** {output_filename}\n\n🌟 **Size:** {filesize_human}"
+
+    await safe_edit_message(sts, "💠 Uploading... ⚡")
+    c_time = time.time()
+
+    if filesize > FILE_SIZE_LIMIT:
+        file_link = await upload_to_google_drive(output_file, output_filename, sts)
+        button = [[InlineKeyboardButton("☁️ CloudUrl ☁️", url=file_link)]]
+        await bot.send_message(
+            chat_id=user_id,
+            text=(
+                f"**✅ File successfully processed and uploaded!**\n\n"
+                f"📂 **File:** {output_filename}\n"
+                f"🔗 **Link:** [View Here]({file_link})\n"
+                f"💾 **Size:** {filesize_human}\n\n"
+                f"👤 **Requested by:** {callback_query.from_user.mention}"
+            ),
+            reply_markup=InlineKeyboardMarkup(button)
+        )
+    else:
+        try:
+            await bot.send_document(
+                chat_id=user_id,
+                document=output_file,
+                thumb=file_thumb,
+                caption=caption_text,
+                progress=progress_message,
+                progress_args=("💠 Upload Started... ⚡", sts, c_time)
+            )
+        except Exception as e:
+            await safe_edit_message(sts, f"❗ Upload Error: {e}")
+
+    # Send notification to log channel
+    await bot.send_message(
+        chat_id=LOG_CHANNEL,
+        text=f"✅ File `{output_filename}` processed and sent to {callback_query.from_user.mention}."
+    )
+
+    # Cleanup
+    if downloaded and os.path.exists(downloaded):
+        os.remove(downloaded)
+    if output_file and os.path.exists(output_file):
+        os.remove(output_file)
+    if file_thumb and os.path.exists(file_thumb):
+        os.remove(file_thumb)
+
+    await sts.delete()
 
 # Command handler for /list
 @Client.on_message(filters.private & filters.command("list"))
