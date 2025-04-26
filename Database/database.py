@@ -45,8 +45,7 @@ class Database:
             'screenshots': "Not set",
             'thumbnail_path': None,        
             'gdrive_folder_id': None,            
-            }
-        }
+            }      
         user = await self.users_col.find_one({'id': user_id})
         if user:
             return user.get('settings', default_settings)
