@@ -8,6 +8,7 @@ class Database:
         self.db = self._client[database_name]        
         self.users_col = self.db["users"]
         self.files_col = self.db.files
+        self.stats_col = self.db.stats
         self.banned_col = self.db["banned_users"]
 
     async def add_user(self, user_id: int, username: str):
@@ -25,7 +26,25 @@ class Database:
             print(f"An error occurred while updating the user: {e}")
             raise
 
-      
+     async def save_stats(self, stats):
+        try:
+            await self.stats_col.update_one(
+                {'_id': 'server_stats'},
+                {'$set': stats},
+                upsert=True
+            )
+        except Exception as e:
+            print(f"An error occurred while saving stats: {e}")
+
+    async def get_stats(self):
+        try:
+            stats = await self.stats_col.find_one({'_id': 'server_stats'})
+            if stats:
+                return stats
+            return {}
+        except Exception as e:
+            print(f"An error occurred while retrieving stats: {e}")
+            return {}  
  
     async def ban_user(self, user_id: int):
         try:
@@ -112,9 +131,12 @@ class Database:
         return None
      
     async def clear_database(self):
-        # Drop all collections
+        # Drop all collections 
         await self.users_col.drop()
-
+        await self.files_col.drop()
+        await self.stats_col.drop()
+        await self.banned_col.drop()
+        
     async def update_user_settings(self, user_id, settings):
         await self.users_col.update_one({'id': user_id}, {'$set': {'settings': settings}}, upsert=True)
         
