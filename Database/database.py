@@ -93,19 +93,14 @@ class Database:
             print(f"An error occurred while checking if user is banned: {e}")
             raise
 
-    async def update_user_membership(self, user_id: int, joined_updates_channel: bool, joined_group_channel: bool):
-        try:
-            await self.users_col.update_one(
-                {"user_id": user_id},
-                {"$set": {
-                    "joined_updates_channel": joined_updates_channel,
-                    "joined_group_channel": joined_group_channel
-                }},
-                upsert=True
-            )
-        except PyMongoError as e:
-            print(f"An error occurred while updating user membership: {e}")
-            raise  
+    async def save_gdrive_folder_id(self, user_id, folder_id):
+        await self.users_col.update_one({'id': user_id}, {'$set': {'settings.gdrive_folder_id': folder_id}}, upsert=True)
+    
+    async def get_gdrive_folder_id(self, user_id):
+        user = await self.users_col.find_one({'id': user_id})
+        if user:
+            return user.get('settings', {}).get('gdrive_folder_id')
+        return None
     
     
     async def update_user_settings(self, user_id, settings):
