@@ -11,19 +11,20 @@ class Database:
         self.stats_col = self.db.stats
         self.banned_col = self.db["banned_users"]
 
-    async def add_user(self, user_id: int, username: str):
-    try:
-        await self.users_col.update_one(
-            {"user_id": user_id},
-            {"$set": {
-                "username": username
-            }},
-            upsert=True
-        )
-    except PyMongoError as e:
-        print(f"An error occurred while updating the user: {e}")
-        raise
 
+    async def add_user(self, user_id: int, username: str):
+        try:
+            await self.users_col.update_one(
+                {"user_id": user_id},
+                {"$set": {
+                    "username": username
+                }},
+                upsert=True
+            )
+        except PyMongoError as e:
+            print(f"An error occurred while updating the user: {e}")
+            raise
+    
     async def save_stats(self, stats):
         try:
             await self.stats_col.update_one(
