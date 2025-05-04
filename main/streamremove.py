@@ -58,7 +58,7 @@ I'ᴍ ᴀ ᴀᴅᴠᴀɴᴄᴇᴅ ꜱᴛʀᴇᴀᴍɪɴɢ & ᴍɪʀʀᴏʀ ʙᴏ
 """
 
 START_BUTTONS = InlineKeyboardMarkup([
-    [InlineKeyboardButton("Owner 🧑🏻‍💻", url="https://t.me/Sunrises_24)],
+    [InlineKeyboardButton("Owner 🧑🏻‍💻", url="https://t.me/Sunrises_24")],
     [InlineKeyboardButton("Updates 📢", url="https://t.me/Sunrises24botUpdates"),
      InlineKeyboardButton("Support ❤️‍🔥", url="https://t.me/Sunrises24botSupport")]
 ])
