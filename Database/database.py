@@ -26,7 +26,7 @@ class Database:
             print(f"An error occurred while updating the user: {e}")
             raise
 
-     async def save_stats(self, stats):
+    async def save_stats(self, stats):
         try:
             await self.stats_col.update_one(
                 {'_id': 'server_stats'},
@@ -35,7 +35,7 @@ class Database:
             )
         except Exception as e:
             print(f"An error occurred while saving stats: {e}")
-
+            
     async def get_stats(self):
         try:
             stats = await self.stats_col.find_one({'_id': 'server_stats'})
