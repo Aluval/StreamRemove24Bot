@@ -14,6 +14,6 @@ DATABASE_URI = os.environ.get("DATABASE_URI", "mongodb+srv://HARSHA24:HARSHA24@c
 DATABASE_NAME = os.environ.get("DATABASE_NAME", "Cluster0")
 ADMIN = int(os.environ.get("ADMIN", '6469754522'))
 #ALL FILES UPLOADED - CREDITS 🌟 - @Sunrises_24
-SUNRISES_PIC= "https://graph.org/file/bd91761f6e938e2e6d23a.jpg"  # Replace with your Telegraph link
+SUNRISES_PIC= "https://vault.pictures/p/90cfe454c6a042d38f8a5c1ecc7f28cf"  # Replace with your Telegraph link
 LOG_CHANNEL_ID = os.environ.get("LOG_CHANNEL_ID", -1002145984196)
 
