@@ -576,7 +576,7 @@ async def process_media(bot, callback_query, selected_streams, downloaded, outpu
             await safe_edit_message(sts, f"❗ Upload Error: {e}")
 
     await bot.send_message(
-        chat_id=LOG_CHANNEL,
+        chat_id=LOG_CHANNEL_ID,
         text=f"✅ File `{output_filename}` processed and sent to {callback_query.from_user.mention}."
     )
 
