@@ -1,0 +1,31 @@
+services:
+  - type: web
+    plan: free
+    name: StreamCleanX 
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    repo: https://github.com/Aluval/StreamCleanX.git
+    branch: SH24BOTS
+    autoDeploy: false
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: API_ID
+        sync: false
+      - key: API_HASH
+        sync: false
+      - key: LOG_CHANNEL_ID
+        sync: false
+      - key: DATABASE_NAME
+        sync: false
+      - key: DATABASE_URI
+        sync: false
+      - key: SUNRISES_PIC
+        sync: false
+      - key: ADMIN
+        sync: false
+      - key: WEBHOOK
+        sync: false
+      - key: PORT
+        sync: false
