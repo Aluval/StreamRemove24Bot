@@ -1064,3 +1064,7 @@ async def ping(bot, msg):
     end_t = time.time()
     time_taken_s = (end_t - start_t) * 1000
     await rm.edit(f"Pong!📍\n{time_taken_s:.3f} ms")
+
+if __name__ == '__main__':
+    app = Client("my_bot", bot_token=BOT_TOKEN)
+    app.run()
