@@ -41,6 +41,55 @@ FILE_SIZE_LIMIT = 2 * 1024 * 1024 * 1024  # 2 GB Limit (Change if you want)
 output_filename = ""
 
 
+WELCOME_TEXT = """
+<b>Hᴀɪ {}</b> ✨
+
+I'ᴍ ᴀ ᴀᴅᴠᴀɴᴄᴇᴅ ꜱᴛʀᴇᴀᴍɪɴɢ & ᴍɪʀʀᴏʀ ʙᴏᴛ ғᴏʀ Tᴇʟᴇɢʀᴀᴍ.
+
+➲ Sᴛʀᴇᴀᴍ Fɪʟᴇꜱ Wɪᴛʜᴏᴜᴛ Dᴏᴡɴʟᴏᴀᴅ  
+➲ Rᴇᴍᴏᴠᴇ Aᴜᴅɪᴏ ꜰʀᴏᴍ Vɪᴅᴇᴏꜱ  
+➲ Rᴇᴍᴏᴠᴇ Sᴜʙᴛɪᴛʟᴇꜱ ꜰʀᴏᴍ Vɪᴅᴇᴏꜱ  
+➲ Sᴀᴠᴇ Fɪʟᴇꜱ Aʙᴏᴠᴇ 2GB ᴛᴏ Gᴏᴏɢʟᴇ Dʀɪᴠᴇ  
+➲ Mɪʀʀᴏʀ Fɪʟᴇꜱ ➔ Gᴇᴛ Dʀɪᴠᴇ Lɪɴᴋꜱ
+
+➻ Pʟᴇᴀꜱᴇ ꜱʜᴀʀᴇ ᴛʜɪꜱ ʙᴏᴛ ᴛᴏ ʏᴏᴜʀ ꜰʀɪᴇɴᴅꜱ ❣️
+
+<b>ʙᴏᴛ ɴᴀᴍᴇ:</b> <code>sᴛʀᴇᴀᴍᴄʟᴇᴀɴx</code>
+"""
+
+START_BUTTONS = InlineKeyboardMarkup([
+    [InlineKeyboardButton("Owner 🧑🏻‍💻", url="https://t.me/Sunrises_24)],
+    [InlineKeyboardButton("Updates 📢", url="https://t.me/Sunrises24botUpdates"),
+     InlineKeyboardButton("Support ❤️‍🔥", url="https://t.me/Sunrises24botSupport")]
+])
+
+@Client.on_message(filters.command("start"))
+async def start(client: Client, message: Message):
+    user = message.from_user
+    name = user.first_name
+    user_id = user.id
+    username = user.username or "N/A"
+
+    # Add user to DB
+    await db.add_user(user_id, username)
+
+    # Send welcome message
+    await client.send_photo(
+        chat_id=message.chat.id,
+        photo=SUNRISES_PIC,
+        caption=WELCOME_TEXT.format(name),
+        reply_markup=START_BUTTONS
+    )
+
+    # Notify log channel
+    try:
+        await client.send_message(
+            LOG_CHANNEL_ID,
+            f"💬 <b>New Start</b>\n🆔 <b>User ID:</b> <code>{user_id}</code>\n👤 <b>Username:</b> @{username}"
+        )
+    except Exception as e:
+        print("Logging error:", e)
+        
 #ALL FILES UPLOADED - CREDITS 🌟 - @Sunrises_24
 
 @Client.on_callback_query(filters.regex("^set_sample_video_duration_"))
