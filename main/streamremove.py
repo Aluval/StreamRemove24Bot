@@ -1004,3 +1004,63 @@ async def broadcast(bot, msg: Message):
     await msg.reply_text(f"Broadcast completed: {sent_count} sent, {failed_count} failed.")
     await msg.reply_document('broadcast_log.txt')
 
+#ALL FILES UPLOADED - CREDITS 🌟 - @Sunrises_24
+#FUNCTION ABOUT HANDLER
+@Client.on_message(filters.command("about"))
+async def about_command(bot, msg):
+    about_text = """
+<b>✯ Mʏ Nᴀᴍᴇ : <a href=https://t.me/StreamCleanXBot>ꜱᴛʀᴇᴀᴍᴄʟᴇᴀɴx 🌟</a></b>
+<b>✯ Dᴇᴠᴇʟᴏᴘᴇʀ 🧑🏻‍💻 : <a href=https://t.me/Sunrises_24>𝐒𝐔𝐍𝐑𝐈𝐒𝐄𝐒™ ⚡</a></b>
+<b>✯ Uᴘᴅᴀᴛᴇs 📢 : <a href=https://t.me/Sunrises24BotUpdates>𝐔𝐏𝐃𝐀𝐓𝐄𝐒 📢</a></b>
+<b>✯ Sᴜᴘᴘᴏʀᴛ ✨ : <a href=https://t.me/Sunrises24BotUpdates>𝐒𝐔𝐏𝐏𝐎𝐑𝐓 ✨</a></b>
+<b>✯ Bᴜɪʟᴅ Sᴛᴀᴛᴜs 📊 : ᴠ2.5 [Sᴛᴀʙʟᴇ]</b>
+    """
+    await msg.reply_text(about_text)
+
+# Function to handle /help command
+@Client.on_message(filters.command("help"))
+async def help_command(bot, msg):
+    help_text = """
+    <b>Hᴇʟʟᴏ Mᴀᴡᴀ ❤️
+Hᴇʀᴇ Is Tʜᴇ Hᴇʟᴘ Fᴏʀ Mʏ Cᴏᴍᴍᴀɴᴅs.
+
+🦋 ʜᴏᴡ ᴛᴏ ᴜꜱᴇ
+◉ Reply To Any Video/File 🖼️
+
+/start - 𝐵𝑜𝑡 𝑎𝑙𝑖𝑣𝑒 𝑜𝑟 𝑁𝑜𝑡 🚶🏻
+/usersettings - 𝑂𝑝𝑒𝑛 𝑡ℎ𝑒 𝑈𝑠𝑒𝑟𝑠𝑒𝑡𝑡𝑖𝑛𝑔𝑠 𝐹𝑜𝑟 𝐵𝑜𝑡 𝐼𝑛𝑓𝑜
+/clear - 𝑐𝑙𝑒𝑎𝑟 𝑡ℎ𝑒 𝑑𝑎𝑡𝑎𝑏𝑎𝑠𝑒
+/gdriveid - 𝑇ℎ𝑒 𝐺𝑜𝑜𝑔𝑙𝑒 𝐷𝑟𝑖𝑣𝑒 𝐹𝑜𝑙𝑑𝑒𝑟 𝐼𝐷 𝑆𝑒𝑡𝑢𝑝 📁[𝑃𝑟𝑖𝑣𝑎𝑡𝑒]
+/mirror - 𝑀𝑖𝑟𝑟𝑜𝑟 𝑓𝑖𝑙𝑒𝑠 𝑡𝑜 𝑎 𝐺𝑜𝑜𝑔𝑙𝑒 𝐷𝑟𝑖𝑣𝑒 𝑙𝑖𝑛𝑘.
+/clone -  𝐶𝑙𝑜𝑛𝑒 𝑎 𝐺𝑜𝑜𝑔𝑙𝑒 𝐷𝑟𝑖𝑣𝑒 𝑙𝑖𝑛𝑘.
+/list - 𝐶ℎ𝑒𝑐𝑘 𝑡ℎ𝑒 𝑓𝑖𝑙𝑒𝑠 𝑖𝑛 𝐺𝑜𝑜𝑔𝑙𝑒 𝐷𝑟𝑖𝑣𝑒 𝑣𝑖𝑎 𝑡ℎ𝑒 𝑏𝑜𝑡.
+/clean - 𝐷𝑒𝑙𝑒𝑡𝑒 𝑓𝑖𝑙𝑒𝑠 𝑖𝑛 𝐺𝑜𝑜𝑔𝑙𝑒 𝐷𝑟𝑖𝑣𝑒 𝑏𝑦 𝑓𝑖𝑙𝑒 𝑛𝑎𝑚𝑒.
+/streamremove  - 𝑅𝑒𝑚𝑜𝑣𝑒 𝐴𝑢𝑑𝑖𝑜𝑠 𝑜𝑟 𝑆𝑢𝑏𝑡𝑖𝑡𝑙𝑒𝑠
+/samplevideo - 𝐶𝑟𝑒𝑎𝑡𝑒 𝐴 𝑆𝑎𝑚𝑝𝑙𝑒 𝑉𝑖𝑑𝑒𝑜 🎞️
+/screenshots - 𝐶𝑎𝑝𝑡𝑢𝑟𝑒 𝑠𝑜𝑚𝑒 𝑚𝑒𝑚𝑜𝑟𝑎𝑏𝑙𝑒 𝑠ℎ𝑜𝑡𝑠 📸
+/stats - 𝑠𝑡𝑎𝑡𝑠 𝑜𝑓 𝑡ℎ𝑒 𝑏𝑜𝑡 📊
+/users - 𝐴𝑐𝑡𝑖𝑣𝑒 𝑢𝑠𝑒𝑟𝑠 𝑜𝑓 𝑏𝑜𝑡[𝐴𝑑𝑚𝑖𝑛]
+/ban - 𝐵𝑎𝑛 𝑡ℎ𝑒 𝑢𝑠𝑒𝑟 𝑓𝑟𝑜𝑚  𝐵𝑜𝑡[𝐴𝑑𝑚𝑖𝑛]
+/unban - 𝑈𝑛𝑏𝑎𝑛 𝑡ℎ𝑒 𝑢𝑠𝑒𝑟 𝑓𝑟𝑜𝑚  𝐵𝑜𝑡[𝐴𝑑𝑚𝑖𝑛]
+/broadcast  -  𝑀𝑒𝑠𝑠𝑎𝑔𝑒𝑠 𝑡𝑜 𝐸𝑣𝑒𝑟𝑦 𝑈𝑠𝑒𝑟𝑠 𝑖𝑛 𝑏𝑜𝑡 [𝐴𝑑𝑚𝑖𝑛]
+/help - 𝐺𝑒𝑡 𝑑𝑒𝑡𝑎𝑖𝑙𝑒𝑑 𝑜𝑓 𝑏𝑜𝑡 𝑐𝑜𝑚𝑚𝑎𝑛𝑑𝑠 📝
+/about - 𝐿𝑒𝑎𝑟𝑛 𝑚𝑜𝑟𝑒 𝑎𝑏𝑜𝑢𝑡 𝑡ℎ𝑖𝑠 𝑏𝑜𝑡 🧑🏻‍💻
+/ping - 𝑇𝑜 𝐶ℎ𝑒𝑐𝑘 𝑇ℎ𝑒 𝑃𝑖𝑛𝑔 𝑂𝑓 𝑇ℎ𝑒 𝐵𝑜𝑡 📍
+
+ 💭• Tʜɪs Bᴏᴛ Is Fᴏʟʟᴏᴡs ᴛʜᴇ 𝟸GB Bᴇʟᴏᴡ Fɪʟᴇs Tᴏ Tᴇʟᴇɢʀᴀᴍ.\n• 𝟸GB Aʙᴏᴠᴇ Fɪʟᴇs Tᴏ Gᴏᴏɢʟᴇ Dʀɪᴠᴇ.
+ 
+🔱 𝐌𝐚𝐢𝐧𝐭𝐚𝐢𝐧𝐞𝐝 𝐁𝐲 : <a href='https://t.me/Sunrises_24'>𝐒𝐔𝐍𝐑𝐈𝐒𝐄𝐒™</a></b>
+    
+   """
+    await msg.reply_text(help_text)
+    
+
+#ALL FILES UPLOADED - CREDITS 🌟 - @Sunrises_24
+#Ping
+@Client.on_message(filters.command("ping"))
+async def ping(bot, msg):
+    start_t = time.time()
+    rm = await msg.reply_text("Checking")
+    end_t = time.time()
+    time_taken_s = (end_t - start_t) * 1000
+    await rm.edit(f"Pong!📍\n{time_taken_s:.3f} ms")
