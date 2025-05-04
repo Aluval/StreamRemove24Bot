@@ -12,7 +12,7 @@ from pyrogram.errors import MessageNotModified
 from main.utils import progress_message, humanbytes
 from config import CAPTION, ADMIN
 from main.utils import upload_files, download_file_from_drive
-import aiohttp
+import aiohttp 
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup,CallbackQuery 
 from pyrogram.errors import RPCError, FloodWait
 import asyncio
@@ -28,7 +28,18 @@ from config import *
 from Database.database import db
 from pymongo.errors import PyMongoError
 import psutil
+import logging
 
+logging.basicConfig(
+    filename='SunrisesBot.txt',
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+
+# Example of logging a message
+logging.info('Bot started successfully!')
+
+START_TIME = datetime.datetime.now()
 
 #varibles for streameremove
 
@@ -138,7 +149,8 @@ async def display_user_settings(client, msg, edit=False):
         [InlineKeyboardButton("💠", callback_data="sunrises24_bot_updates")],
         [InlineKeyboardButton("Sample Video Settings 🎞️", callback_data="sample_video_option")],
         [InlineKeyboardButton("Screenshots Settings 📸", callback_data="screenshots_option")],
-        [InlineKeyboardButton("Thumbnail Settings 📄", callback_data="thumbnail_settings")],       
+        [InlineKeyboardButton("Thumbnail Settings 📄", callback_data="thumbnail_settings")],
+        [InlineKeyboardButton("View Google Drive Folder ID 📂", callback_data="preview_gdrive")],
         [InlineKeyboardButton("💠", callback_data="sunrises24_bot_updates")],
         [InlineKeyboardButton("Close ❌", callback_data="del")]
     ])
@@ -1012,6 +1024,33 @@ async def refresh_stats_callback(_, callback_query):
         ]
     ))
 
+
+@Client.on_message(filters.private & filters.command("gdriveid"))
+async def setup_gdrive_id(bot, msg: Message):
+    user_id = msg.from_user.id
+    args = msg.text.split(" ", 1)
+    if len(args) != 2:
+        return await msg.reply_text("Usage: /gdriveid {your_gdrive_folder_id}")
+    
+    gdrive_folder_id = args[1].strip()
+    
+    # Save Google Drive folder ID to the database
+    await db.save_gdrive_folder_id(user_id, gdrive_folder_id)
+    
+    await msg.reply_text(f"Google Drive folder ID set to: {gdrive_folder_id} for user `{user_id}`\n\nGoogle Drive folder ID set successfully✅!")
+
+@Client.on_callback_query(filters.regex("^preview_gdrive$"))
+async def inline_preview_gdrive(bot, callback_query):
+    user_id = callback_query.from_user.id
+    
+    # Retrieve Google Drive folder ID from the database
+    gdrive_folder_id = await db.get_gdrive_folder_id(user_id)
+    
+    if not gdrive_folder_id:
+        return await callback_query.message.reply_text(f"Google Drive Folder ID is not set for user `{user_id}`. Use /gdriveid {{your_gdrive_folder_id}} to set it.")
+    
+    await callback_query.message.reply_text(f"Current Google Drive Folder ID for user `{user_id}`: {gdrive_folder_id}")
+    
 
 @Client.on_message(filters.command("clear") & filters.user(ADMIN))
 async def clear_database_handler(client: Client, msg: Message):
