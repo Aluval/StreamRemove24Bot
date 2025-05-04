@@ -1,4 +1,4 @@
-![Typing SVG](https://readme-typing-svg.herokuapp.com/?lines=𝐖𝐄𝐋𝐂𝐎𝐌𝐄+𝐓𝐎+🌟+𝐌𝐞𝐭𝐚𝐌𝐨𝐫𝐩𝐡𝐞𝐫+🌟♾;𝗖𝗥𝗘𝗔𝗧𝗘𝗗+𝗕𝗬+𝗧𝗘𝗔𝗠+𝐒𝐔𝐍𝐑𝐈𝐒𝐄𝐒+𝐇𝐀𝐑𝐒𝐇𝐀+𝟐𝟒✨!;❤️‍🔥𝐒𝐭𝐫𝐞𝐚𝐦𝐂𝐥𝐞𝐚𝐧𝐗❤️‍🔥!)</p>
+![Typing SVG](https://readme-typing-svg.herokuapp.com/?lines=𝐖𝐄𝐋𝐂𝐎𝐌𝐄+𝐓𝐎+❤️‍🔥+𝐒𝐭𝐫𝐞𝐚𝐦𝐂𝐥𝐞𝐚𝐧𝐗+❤️‍🔥♾;𝗖𝗥𝗘𝗔𝗧𝗘𝗗+𝗕𝗬+𝗧𝗘𝗔𝗠+𝐒𝐔𝐍𝐑𝐈𝐒𝐄𝐒+𝐇𝐀𝐑𝐒𝐇𝐀+𝟐𝟒✨!;❤️‍🔥𝐒𝐭𝐫𝐞𝐚𝐦𝐂𝐥𝐞𝐚𝐧𝐗❤️‍🔥!)</p>
 <img src="https://envs.sh/lHg.jpg" alt="logo" target="/blank">
 
 <h1 align="center">
