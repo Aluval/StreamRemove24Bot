@@ -1,0 +1,77 @@
+{ 
+    "name": "MetaMorpher", 
+    "description": "ADVANCE StreamCleanX BOT WITH THUMBNAIL,CAPTION & HIGH SPEED ⚡️",
+    "logo":"https://envs.sh/lHg.jpg",
+    "repository": "https://github.com/Aluval/StreamCleanX",   
+    "keywords": ["Stream", "Telegram", "ADVANCE StreamCleanX 24 BOT"], 
+    "env": { 
+        "BOT_TOKEN": { 
+            "description": "Your Bot token from @Botfather", 
+            "required": true 
+        }, 
+        "API_ID": { 
+            "description": "Your API_ID from https://my.telegram.org/apps", 
+            "required": true 
+        }, 
+        "API_HASH": { 
+            "description": "Your API_HASH from https://my.telegram.org/apps", 
+            "required": true 
+        },
+        "DATABASE_URI": {
+            "description": "mongoDB URI. Get this value from https://www.mongodb.com. For more help watch this video - https://youtu.be/dsuTn4qV2GA",
+            "value": "",
+            "required": true
+        },
+        "DATABASE_NAME": {
+            "description": "Name of the database in mongoDB. For more contact to admin",
+            "value": "Cluster0",
+            "required": false
+        },
+        "LOG_CHANNEL_ID": {
+            "description": "Add to bot & admin the bot in channel",
+            "value": "",
+            "required": true
+        },
+        "WEBHOOK": {
+            "description": "web true only",
+            "value": "True",
+            "required": true
+        },
+         "PORT": {
+            "description": "8080",
+            "value": "8080",
+            "required": true   
+        },        
+        "SUNRISES_PIC": { 
+            "description": "Start Pic", 
+            "required": true 
+        },         
+        "ADMIN": { 
+            "description": "Your telegram ID,Run the Bot", 
+            "required": true 
+        }, 
+        "CAPTION": { 
+            "description": "your permanent caption", 
+            "required": false 
+        }       
+        },
+    "buildpacks": [
+        {
+            "url": "heroku/python"
+        },
+        {
+            "url": "https://github.com/jonathanong/heroku-buildpack-ffmpeg-latest.git"
+        }
+    ]
+}
+
+
+
+
+
+
+
+
+
+
+
