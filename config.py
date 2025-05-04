@@ -17,5 +17,3 @@ ADMIN = int(os.environ.get("ADMIN", '6469754522'))
 SUNRISES_PIC= "https://graph.org/file/bd91761f6e938e2e6d23a.jpg"  # Replace with your Telegraph link
 LOG_CHANNEL_ID = os.environ.get("LOG_CHANNEL_ID", -1002145984196)
 
-FSUB_UPDATES = os.environ.get("FSUB_CHANNEL", "Sunrises24BotUpdates")
-FSUB_GROUP = os.environ.get("FSUB_GROUP", "Sunrises24BotSupport")
