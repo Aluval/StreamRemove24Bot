@@ -602,8 +602,49 @@ async def process_media(bot, callback_query, selected_streams, downloaded, outpu
 
     await sts.delete()
 
+#clone
+@Client.on_message(filters.private & filters.command("clone"))
+async def clone_file(bot, msg: Message):
+    user_id = msg.from_user.id
 
+    # Retrieve the user's Google Drive folder ID from database
+    gdrive_folder_id = await db.get_gdrive_folder_id(user_id)
 
+    if not gdrive_folder_id:
+        return await msg.reply_text("Google Drive folder ID is not set. Please use the /gdriveid command to set it.")
+
+    if len(msg.command) < 2:
+        return await msg.reply_text("Please specify the Google Drive file URL.")
+
+    src_url = msg.text.split(" ", 1)[1]
+    src_id = extract_id_from_url(src_url)
+
+    if not src_id:
+        return await msg.reply_text("Invalid Google Drive URL. Please provide a valid file URL.")
+
+    sts = await msg.reply_text("Starting cloning process...")
+
+    try:
+        copied_file_info = await copy_file(src_id, gdrive_folder_id)
+        if copied_file_info:
+            file_link = f"https://drive.google.com/file/d/{copied_file_info['id']}/view"
+            button = [
+                [InlineKeyboardButton("☁️ View File ☁️", url=file_link)]
+            ]
+            if copied_file_info['status'] == 'existing':
+                await sts.edit(
+                    f"File Already Exists 📂 : {copied_file_info['name']}\n[View File]({file_link})",
+                    reply_markup=InlineKeyboardMarkup(button)
+                )
+            else:
+                await sts.edit(
+                    f"File Cloned Successfully ✅: {copied_file_info['name']}\n[View File]({file_link})",
+                    reply_markup=InlineKeyboardMarkup(button)
+                )
+        else:
+            await sts.edit("Failed to clone the file.")
+    except Exception as e:
+        await sts.edit(f"Error: {e}")
 
 # Command handler for /list
 @Client.on_message(filters.private & filters.command("list"))
