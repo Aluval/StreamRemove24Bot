@@ -38,17 +38,32 @@ def authenticate_google_drive():
 creds = authenticate_google_drive()
 drive_service = build('drive', 'v3', credentials=creds)
 
-async def upload_to_google_drive(file_path, file_name, sts):
-    file_metadata = {'name': file_name}
+async def upload_to_google_drive(file_path, file_name, folder_id, sts):
+    file_metadata = {
+        'name': file_name,
+        'parents': [folder_id]  # ✅ USER FOLDER
+    }
+
     media = MediaFileUpload(file_path, resumable=True)
-    request = drive_service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink')
+    request = drive_service.files().create(
+        body=file_metadata,
+        media_body=media,
+        fields='id, webViewLink'
+    )
 
     response = None
     start_time = time.time()
+
     while response is None:
         status, response = request.next_chunk()
         if status:
-            await progress_message(status.resumable_progress, os.path.getsize(file_path), "Uploading to Google Drive", sts, start_time)
+            await progress_message(
+                status.resumable_progress,
+                os.path.getsize(file_path),
+                "Uploading to Google Drive",
+                sts,
+                start_time
+            )
 
     return response.get('webViewLink')
 
