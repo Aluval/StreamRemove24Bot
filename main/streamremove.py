@@ -340,7 +340,110 @@ async def mirror_to_google_drive(bot, msg: Message):
         await sts.edit(f"Error: {e}")
             
 
+@Client.on_message(filters.private & filters.command("streamremovelink"))
+async def streamremove_link(bot, msg):
+    global downloaded
+    global output_filename
+    global selected_streams
 
+    if len(msg.command) < 4 or msg.command[1] != "-n":
+        return await msg.reply_text(
+            "❌ Usage:\n"
+            "`/streamremovelink -n filename.mkv <direct_link>`"
+        )
+
+    output_filename = msg.command[2]
+    file_link = msg.command[3]
+
+    if not output_filename.lower().endswith((".mkv", ".mp4", ".avi")):
+        return await msg.reply_text("❌ Invalid output file extension.")
+
+    sts = await msg.reply_text("⬇️ Downloading from link...")
+    start_time = time.time()
+
+    # ---------- DOWNLOAD FROM LINK ----------
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(file_link) as resp:
+                if resp.status != 200:
+                    return await sts.edit("❌ Failed to download file.")
+
+                downloaded = f"link_{int(time.time())}.tmp"
+                with open(downloaded, "wb") as f:
+                    async for chunk in resp.content.iter_chunked(1024 * 1024):
+                        f.write(chunk)
+
+    except Exception as e:
+        return await sts.edit(f"❌ Download Error:\n{e}")
+
+    # ---------- FFPROBE ----------
+    ffprobe_cmd = [
+        "ffprobe", "-v", "error",
+        "-show_entries", "stream=index:stream=codec_type:stream_tags=language",
+        "-of", "json", downloaded
+    ]
+
+    process = await asyncio.create_subprocess_exec(
+        *ffprobe_cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await process.communicate()
+
+    if process.returncode != 0:
+        return await sts.edit("❌ FFprobe failed.")
+
+    streams = json.loads(stdout.decode()).get("streams", [])
+
+    audio_video_streams = []
+    subtitle_streams = []
+
+    for s in streams:
+        idx = s["index"]
+        lang = s.get("tags", {}).get("language", "unknown")
+        ctype = s["codec_type"]
+
+        if ctype == "audio":
+            audio_video_streams.append(f"{idx} 🎵 Audio ({lang})")
+        elif ctype == "subtitle":
+            subtitle_streams.append(f"{idx} 📝 Subtitle ({lang})")
+        elif ctype == "video":
+            audio_video_streams.append(f"{idx} 📹 Video")
+
+    # ---------- BUTTONS ----------
+    buttons = []
+    max_len = max(len(audio_video_streams), len(subtitle_streams))
+
+    for i in range(max_len):
+        row = []
+        if i < len(audio_video_streams):
+            row.append(
+                InlineKeyboardButton(
+                    audio_video_streams[i],
+                    callback_data=f"toggle_{audio_video_streams[i].split()[0]}"
+                )
+            )
+        if i < len(subtitle_streams):
+            row.append(
+                InlineKeyboardButton(
+                    subtitle_streams[i],
+                    callback_data=f"toggle_{subtitle_streams[i].split()[0]}"
+                )
+            )
+        buttons.append(row)
+
+    buttons.append([InlineKeyboardButton("🔄 Reverse", callback_data="reverse")])
+    buttons.append([
+        InlineKeyboardButton("❌ Cancel", callback_data="cancel"),
+        InlineKeyboardButton("✅ Done", callback_data="done")
+    ])
+
+    selected_streams.clear()
+
+    await sts.edit(
+        "🎯 Select streams to remove:",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
 
 
 async def safe_edit_message(message, text):
