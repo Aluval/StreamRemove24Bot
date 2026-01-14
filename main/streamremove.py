@@ -449,18 +449,7 @@ async def streamremove(bot, msg):
 
     message = await sts.edit("Select the streams you want to remove (you have 60 seconds):", reply_markup=markup)
 
-    await asyncio.sleep(60)
-
-    try:
-        await message.edit("🕒 Time's up! Selection process has been canceled.")
-        await asyncio.sleep(5)
-        await message.delete()
-    except:
-        pass
-
-    if downloaded and os.path.exists(downloaded):
-        os.remove(downloaded)
-        
+           
 @Client.on_callback_query(filters.regex(r'toggle_\d+|done|cancel|reverse'))
 async def callback_query_handler(bot, callback_query: CallbackQuery):
     global selected_streams
