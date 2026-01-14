@@ -41,7 +41,7 @@ drive_service = build('drive', 'v3', credentials=creds)
 async def upload_to_google_drive(file_path, file_name, folder_id, sts):
     file_metadata = {
         'name': file_name,
-        'parents': [folder_id]  # ✅ USER FOLDER
+        'parents': [folder_id]
     }
 
     media = MediaFileUpload(file_path, resumable=True)
@@ -52,7 +52,7 @@ async def upload_to_google_drive(file_path, file_name, folder_id, sts):
     )
 
     response = None
-    start_time = time.time()
+    start = time.time()
 
     while response is None:
         status, response = request.next_chunk()
@@ -60,12 +60,12 @@ async def upload_to_google_drive(file_path, file_name, folder_id, sts):
             await progress_message(
                 status.resumable_progress,
                 os.path.getsize(file_path),
-                "Uploading to Google Drive",
+                "☁️ Uploading to Google Drive",
                 sts,
-                start_time
+                start
             )
 
-    return response.get('webViewLink')
+    return response['webViewLink']
 
 #Driveleech
 def extract_id_from_driveurl(url):
