@@ -342,26 +342,33 @@ async def mirror_to_google_drive(bot, msg: Message):
 
 @Client.on_message(filters.private & filters.command("streamremovelink"))
 async def streamremove_link(bot, msg):
-    global downloaded
-    global output_filename
-    global selected_streams
+    global downloaded, output_filename, selected_streams
 
-    if len(msg.command) < 4 or msg.command[1] != "-n":
+    # Must reply to a message containing link
+    if not msg.reply_to_message or not msg.reply_to_message.text:
         return await msg.reply_text(
-            "❌ Usage:\n"
-            "`/streamremovelink -n filename.mkv <direct_link>`"
+            "❌ Reply to a message that contains a direct link.\n\n"
+            "Usage:\n`/streamremovelink -n filename.mkv`"
         )
 
-    output_filename = msg.command[2]
-    file_link = msg.command[3]
+    if len(msg.command) < 3 or msg.command[1] != "-n":
+        return await msg.reply_text(
+            "❌ Usage:\n`/streamremovelink -n filename.mkv`"
+        )
 
+    output_filename = " ".join(msg.command[2:]).strip()
+    file_link = msg.reply_to_message.text.strip()
+
+    # Extension validation
     if not output_filename.lower().endswith((".mkv", ".mp4", ".avi")):
-        return await msg.reply_text("❌ Invalid output file extension.")
+        return await msg.reply_text(
+            f"❌ Invalid output file extension:\n`{output_filename}`"
+        )
 
     sts = await msg.reply_text("⬇️ Downloading from link...")
     start_time = time.time()
 
-    # ---------- DOWNLOAD FROM LINK ----------
+    # ---------- DOWNLOAD ----------
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(file_link) as resp:
