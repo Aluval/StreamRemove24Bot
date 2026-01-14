@@ -44,7 +44,7 @@ logging.info('Bot started successfully!')
 START_TIME = datetime.datetime.now()
 
 #varibles for streameremove
-
+user_sessions = {} # per-user safe storage
 
 # Define your constants
 FILE_SIZE_LIMIT = 2 * 1024 * 1024 * 1024  # 2 GB Limit (Change if you want)
