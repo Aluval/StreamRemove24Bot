@@ -44,10 +44,11 @@ logging.info('Bot started successfully!')
 START_TIME = datetime.datetime.now()
 
 #varibles for streameremove
-user_sessions = {} # per-user safe storage
+selected_streams = set()
+downloaded = None
+output_filename = None
 
-# Define your constants
-FILE_SIZE_LIMIT = 2 * 1024 * 1024 * 1024  # 2 GB Limit (Change if you want)
+FILE_SIZE_LIMIT = 2 * 1024 * 1024 * 1024  # 2GB
 
 WELCOME_TEXT = """
 <b>Hᴀɪ {}</b> ✨
@@ -348,7 +349,7 @@ async def safe_edit_message(message, text):
     except Exception:
         pass
 
-"""
+
 @Client.on_message(filters.command("streamremove") & filters.private)
 async def streamremove(bot, msg):
     global selected_streams
@@ -514,7 +515,7 @@ async def callback_query_handler(bot, callback_query: CallbackQuery):
 
     await callback_query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
 
-
+"""
 async def process_media(bot, callback_query, selected_streams, downloaded, output_filename, sts):
     user_id = callback_query.from_user.id
     output_file = output_filename
@@ -601,250 +602,93 @@ async def process_media(bot, callback_query, selected_streams, downloaded, outpu
     await sts.delete()
 
 """
+async def process_media(bot, callback_query, selected_streams, downloaded, output_filename, sts):
+    user_id = callback_query.from_user.id
+    output_file = output_filename
 
+    # ---------- FFmpeg Command ----------
+    ffmpeg_cmd = ['ffmpeg', '-i', downloaded, '-map', '0']
+    for idx in selected_streams:
+        ffmpeg_cmd.extend(['-map', f'-0:{idx}'])
 
+    ffmpeg_cmd.extend(['-c', 'copy', output_file, '-y'])
 
-
-# ─────────────────────────────────────────────
-# /STREAMREMOVE COMMAND
-# ─────────────────────────────────────────────
-@Client.on_message(filters.command("streamremove") & filters.private)
-async def streamremove(bot: Client, msg: Message):
-    reply = msg.reply_to_message
-    if not reply:
-        return await msg.reply_text(
-            "Reply to a video:\n`/streamremove -n filename.mkv`"
-        )
-
-    if len(msg.command) < 3 or msg.command[1] != "-n":
-        return await msg.reply_text(
-            "Usage:\n`/streamremove -n filename.mkv`"
-        )
-
-    output_name = " ".join(msg.command[2:]).strip()
-    if not output_name.lower().endswith((".mkv", ".mp4", ".avi")):
-        return await msg.reply_text("Invalid filename ❌")
-
-    sts = await msg.reply_text("🚀 Downloading...")
-    start = time.time()
-
-    downloaded = await reply.download(
-        progress=progress_message,
-        progress_args=("Downloading", sts, start)
+    process = await asyncio.create_subprocess_exec(
+        *ffmpeg_cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
     )
+    _, stderr = await process.communicate()
 
-    # Save user session
-    user_sessions[msg.from_user.id] = {
-        "downloaded": downloaded,
-        "output": output_name,
-        "streams": set()
-    }
-
-    # FFPROBE
-    cmd = [
-        "ffprobe", "-v", "error",
-        "-show_entries", "stream=index:stream=codec_type:stream_tags=language",
-        "-of", "json", downloaded
-    ]
-
-    proc = await asyncio.create_subprocess_exec(
-        *cmd, stdout=asyncio.subprocess.PIPE
-    )
-    out, _ = await proc.communicate()
-    streams = json.loads(out)["streams"]
-
-    buttons = []
-
-    for s in streams:
-        idx = s["index"]
-        typ = s["codec_type"]
-        lang = s.get("tags", {}).get("language", "unknown")
-
-        if typ == "audio":
-            buttons.append([
-                InlineKeyboardButton(
-                    f"{idx} 🎵 Audio ({lang})",
-                    callback_data=f"toggle_{idx}"
-                )
-            ])
-        elif typ == "subtitle":
-            buttons.append([
-                InlineKeyboardButton(
-                    f"{idx} 📝 Subtitle ({lang})",
-                    callback_data=f"toggle_{idx}"
-                )
-            ])
-
-    # AUTO + REVERSE CONTROLS
-    buttons.append([
-        InlineKeyboardButton("🧠 Remove ALL Audio 🎵", callback_data="auto_audio"),
-        InlineKeyboardButton("🧠 Remove ALL Subs 📝", callback_data="auto_subs")
-    ])
-
-    buttons.append([
-        InlineKeyboardButton("🔄 Reverse Select", callback_data="reverse")
-    ])
-
-    buttons.append([
-        InlineKeyboardButton("❌ Cancel", callback_data="cancel"),
-        InlineKeyboardButton("✅ Done", callback_data="done")
-    ])
-
-    await sts.edit(
-        "Select streams to remove:",
-        reply_markup=InlineKeyboardMarkup(buttons)
-    )
-
-# ─────────────────────────────────────────────
-# CALLBACK HANDLER
-# ─────────────────────────────────────────────
-@Client.on_callback_query(
-    filters.regex("toggle_|done|cancel|reverse|auto_audio|auto_subs")
-)
-async def streamremove_cb(bot: Client, cq: CallbackQuery):
-    user_id = cq.from_user.id
-    session = user_sessions.get(user_id)
-
-    if not session:
-        return await cq.answer("Session expired ❌")
-
-    streams = session["streams"]
-    buttons = cq.message.reply_markup.inline_keyboard
-
-    # CANCEL
-    if cq.data == "cancel":
-        if os.path.exists(session["downloaded"]):
-            os.remove(session["downloaded"])
-        user_sessions.pop(user_id, None)
-        return await cq.message.delete()
-
-    # REVERSE SELECT
-    if cq.data == "reverse":
-        all_ids = {
-            btn.callback_data.split("_")[1]
-            for row in buttons
-            for btn in row
-            if btn.callback_data.startswith("toggle_")
-        }
-
-        streams.symmetric_difference_update(all_ids)
-
-        for row in buttons:
-            for btn in row:
-                if btn.callback_data.startswith("toggle_"):
-                    idx = btn.callback_data.split("_")[1]
-                    btn.text = (
-                        f"✅ {btn.text.lstrip('✅ ')}"
-                        if idx in streams
-                        else btn.text.lstrip("✅ ")
-                    )
-
-        await cq.message.edit_reply_markup(
-            InlineKeyboardMarkup(buttons)
-        )
+    if process.returncode != 0:
+        await safe_edit_message(sts, f"❌ FFmpeg Error:\n{stderr.decode()}")
         return
 
-    # AUTO AUDIO
-    if cq.data == "auto_audio":
-        for row in buttons:
-            for btn in row:
-                if "🎵 Audio" in btn.text:
-                    idx = btn.callback_data.split("_")[1]
-                    streams.add(idx)
-                    btn.text = f"✅ {btn.text.lstrip('✅ ')}"
+    # ---------- File Info ----------
+    file_size = os.path.getsize(output_file)
+    size_text = humanbytes(file_size)
 
-        await cq.message.edit_reply_markup(
-            InlineKeyboardMarkup(buttons)
+    await safe_edit_message(sts, "📤 Uploading...")
+
+    # ---------- IF FILE > 2GB → GOOGLE DRIVE ----------
+    if file_size > FILE_SIZE_LIMIT:
+        gdrive_folder_id = await db.get_gdrive_folder_id(user_id)
+
+        if not gdrive_folder_id:
+            await safe_edit_message(
+                sts,
+                "❌ Google Drive Folder ID not set.\nUse `/gdriveid YOUR_FOLDER_ID`"
+            )
+            return
+
+        file_link = await upload_to_google_drive(
+            file_path=output_file,
+            file_name=output_filename,
+            folder_id=gdrive_folder_id,
+            sts=sts
         )
-        return await cq.answer("All audio selected")
 
-    # AUTO SUBTITLES
-    if cq.data == "auto_subs":
-        for row in buttons:
-            for btn in row:
-                if "📝 Subtitle" in btn.text:
-                    idx = btn.callback_data.split("_")[1]
-                    streams.add(idx)
-                    btn.text = f"✅ {btn.text.lstrip('✅ ')}"
-
-        await cq.message.edit_reply_markup(
-            InlineKeyboardMarkup(buttons)
-        )
-        return await cq.answer("All subtitles selected")
-
-    # TOGGLE SINGLE
-    if cq.data.startswith("toggle_"):
-        idx = cq.data.split("_")[1]
-
-        for row in buttons:
-            for btn in row:
-                if btn.callback_data == cq.data:
-                    if idx in streams:
-                        streams.remove(idx)
-                        btn.text = btn.text.lstrip("✅ ")
-                    else:
-                        streams.add(idx)
-                        btn.text = f"✅ {btn.text}"
-                    break
-
-        await cq.message.edit_reply_markup(
-            InlineKeyboardMarkup(buttons)
-        )
-        return
-
-    # DONE
-    await cq.message.edit_text("⚙️ Processing...")
-    await process_streamremove(bot, cq, session)
-
-# ─────────────────────────────────────────────
-# PROCESS + UPLOAD
-# ─────────────────────────────────────────────
-async def process_streamremove(bot: Client, cq: CallbackQuery, session: dict):
-    user_id = cq.from_user.id
-    downloaded = session["downloaded"]
-    output = session["output"]
-    remove_ids = session["streams"]
-
-    # FFmpeg (video always preserved)
-    cmd = ["ffmpeg", "-i", downloaded]
-    for i in remove_ids:
-        cmd += ["-map", f"-0:{i}"]
-    cmd += ["-map", "0:v", "-c", "copy", output, "-y"]
-
-    proc = await asyncio.create_subprocess_exec(*cmd)
-    await proc.communicate()
-
-    size = os.path.getsize(output)
-    sts = cq.message
-
-    if size > FILE_SIZE_LIMIT:
-        folder_id = await db.get_gdrive_folder_id(user_id)
-        link = await upload_to_google_drive(
-            output, output, folder_id, sts
-        )
+        buttons = [[InlineKeyboardButton("☁️ Google Drive Link", url=file_link)]]
 
         await bot.send_message(
-            user_id,
-            f"✅ **Uploaded to Google Drive**\n\n"
-            f"📄 **Filename:** `{output}`\n"
-            f"🔗 **Link:** {link}",
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("☁️ CloudUrl", url=link)]]
-            )
+            chat_id=user_id,
+            text=(
+                f"✅ **Stream Removed Successfully**\n\n"
+                f"📄 **File:** `{output_filename}`\n"
+                f"📦 **Size:** `{size_text}`\n\n"
+                f"🔗 **Drive Link:**\n{file_link}"
+            ),
+            reply_markup=InlineKeyboardMarkup(buttons)
         )
+
+    # ---------- IF FILE ≤ 2GB → TELEGRAM ----------
     else:
         await bot.send_document(
-            user_id,
-            document=output,
-            caption=f"✅ `{output}`"
+            chat_id=user_id,
+            document=output_file,
+            caption=(
+                f"✅ **Stream Removed Successfully**\n\n"
+                f"📄 **File:** `{output_filename}`\n"
+                f"📦 **Size:** `{size_text}`"
+            ),
+            progress=progress_message,
+            progress_args=("📤 Uploading", sts, time.time())
         )
 
-    # CLEANUP
-    for f in [downloaded, output]:
-        if os.path.exists(f):
+    # ---------- LOG ----------
+    await bot.send_message(
+        chat_id=LOG_CHANNEL_ID,
+        text=f"✅ `{output_filename}` processed for {callback_query.from_user.mention}"
+    )
+
+    # ---------- CLEANUP ----------
+    for f in [downloaded, output_file]:
+        if f and os.path.exists(f):
             os.remove(f)
 
-    user_sessions.pop(user_id, None)
+    await sts.delete()
+
+    
 
 #clone
 @Client.on_message(filters.private & filters.command("clone"))
