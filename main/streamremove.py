@@ -619,92 +619,6 @@ async def process_media(bot, callback_query, selected_streams, downloaded, outpu
     user_id = callback_query.from_user.id
     output_file = output_filename
 
-    ffmpeg_cmd = ['ffmpeg', '-i', downloaded, '-map', '0']
-    for idx in selected_streams:
-        ffmpeg_cmd.extend(['-map', f'-0:{idx}'])
-    ffmpeg_cmd.extend(['-c', 'copy', output_file, '-y']
-
-    )
-
-    process = await asyncio.create_subprocess_exec(
-        *ffmpeg_cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
-    )
-    stdout, stderr = await process.communicate()
-
-    if process.returncode != 0:
-        await safe_edit_message(sts, f"❗ FFmpeg error: {stderr.decode('utf-8')}")
-        if downloaded and os.path.exists(downloaded):
-            os.remove(downloaded)
-        if output_file and os.path.exists(output_file):
-            os.remove(output_file)
-        return
-
-    # Get thumbnail
-    file_thumb = None
-    thumb_path = None
-    try:
-        thumbnail_file_id = await db.get_thumbnail(user_id)
-        if thumbnail_file_id:
-            thumb_path = await bot.download_media(thumbnail_file_id, file_name=f"thumb_{user_id}.jpg")
-    except Exception as e:
-        print(f"Thumbnail download error: {e}")
-        thumb_path = None
-
-    if thumb_path and os.path.exists(thumb_path):
-        file_thumb = thumb_path
-    else:
-        file_thumb = None
-
-    filesize = os.path.getsize(output_file)
-    filesize_human = humanbytes(filesize)
-    caption_text = f"**Processed File:** {output_filename}\n\n🌟 **Size:** {filesize_human}"
-
-    await safe_edit_message(sts, "💠 Uploading... ⚡")
-    c_time = time.time()
-
-    if filesize > FILE_SIZE_LIMIT:
-        file_link = await upload_to_google_drive(output_file, output_filename, sts)
-        button = [[InlineKeyboardButton("☁️ CloudUrl ☁️", url=file_link)]]
-        await bot.send_message(
-            chat_id=user_id,
-            text=f"**✅ Uploaded to GDrive:** [View File]({file_link})",
-            reply_markup=InlineKeyboardMarkup(button)
-        )
-    else:
-        try:
-            await bot.send_document(
-                chat_id=user_id,
-                document=output_file,
-                thumb=file_thumb,
-                caption=caption_text,
-                progress=progress_message,
-                progress_args=("💠 Upload Started... ⚡", sts, c_time)
-            )
-        except Exception as e:
-            await safe_edit_message(sts, f"❗ Upload Error: {e}")
-
-    await bot.send_message(
-        chat_id=LOG_CHANNEL_ID,
-        text=f"✅ File `{output_filename}` processed and sent to {callback_query.from_user.mention}."
-    )
-
-    # Clean up
-    if downloaded and os.path.exists(downloaded):
-        os.remove(downloaded)
-    if output_file and os.path.exists(output_file):
-        os.remove(output_file)
-    if file_thumb and os.path.exists(file_thumb):
-        os.remove(file_thumb)
-
-    await sts.delete()
-
-"""
-async def process_media(bot, callback_query, selected_streams, downloaded, output_filename, sts):
-    user_id = callback_query.from_user.id
-    output_file = output_filename
-
     # ---------- FFmpeg Command ----------
     ffmpeg_cmd = ['ffmpeg', '-i', downloaded, '-map', '0']
     for idx in selected_streams:
@@ -786,7 +700,113 @@ async def process_media(bot, callback_query, selected_streams, downloaded, outpu
             os.remove(f)
 
     await sts.delete()
+"""
+    
+async def process_media(bot, callback_query, selected_streams, downloaded, output_filename, sts):
+    user_id = callback_query.from_user.id
+    output_file = output_filename
 
+    # ---------- FFmpeg Command ----------
+    ffmpeg_cmd = ['ffmpeg', '-i', downloaded, '-map', '0']
+    for idx in selected_streams:
+        ffmpeg_cmd.extend(['-map', f'-0:{idx}'])
+
+    ffmpeg_cmd.extend(['-c', 'copy', output_file, '-y'])
+
+    process = await asyncio.create_subprocess_exec(
+        *ffmpeg_cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    _, stderr = await process.communicate()
+
+    if process.returncode != 0:
+        await safe_edit_message(sts, f"❌ FFmpeg Error:\n{stderr.decode()}")
+        return
+
+    # ---------- FILE INFO ----------
+    file_size = os.path.getsize(output_file)
+    size_text = humanbytes(file_size)
+
+    await safe_edit_message(sts, "📤 Uploading...")
+
+    file_thumb = None
+    thumb_path = None
+
+    try:
+        thumbnail_file_id = await db.get_thumbnail(user_id)
+        if thumbnail_file_id:
+            thumb_path = await bot.download_media(
+                thumbnail_file_id,
+                file_name=f"thumb_{user_id}.jpg"
+            )
+    except Exception as e:
+        print("Thumbnail error:", e)
+
+    if thumb_path and os.path.exists(thumb_path):
+        file_thumb = thumb_path
+    else:
+        file_thumb = None
+    # ==================================================
+
+    # ---------- IF FILE > 2GB → GOOGLE DRIVE ----------
+    if file_size > FILE_SIZE_LIMIT:
+        gdrive_folder_id = await db.get_gdrive_folder_id(user_id)
+
+        if not gdrive_folder_id:
+            await safe_edit_message(
+                sts,
+                "❌ Google Drive Folder ID not set.\nUse `/gdriveid YOUR_FOLDER_ID`"
+            )
+            return
+
+        file_link = await upload_to_google_drive(
+            file_path=output_file,
+            file_name=output_filename,
+            folder_id=gdrive_folder_id,
+            sts=sts
+        )
+
+        buttons = [[InlineKeyboardButton("☁️ Google Drive Link", url=file_link)]]
+
+        await bot.send_message(
+            chat_id=user_id,
+            text=(
+                f"✅ **Stream Removed Successfully**\n\n"
+                f"📄 **File:** `{output_filename}`\n"
+                f"📦 **Size:** `{size_text}`\n\n"
+                f"🔗 **Drive Link:**\n{file_link}"
+            ),
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+
+    # ---------- IF FILE ≤ 2GB → TELEGRAM ----------
+    else:
+        await bot.send_document(
+            chat_id=user_id,
+            document=output_file,
+            thumb=file_thumb,  
+            caption=(
+                f"✅ **Stream Removed Successfully**\n\n"
+                f"📄 **File:** `{output_filename}`\n"
+                f"📦 **Size:** `{size_text}`"
+            ),
+            progress=progress_message,
+            progress_args=("📤 Uploading", sts, time.time())
+        )
+
+    # ---------- LOG ----------
+    await bot.send_message(
+        chat_id=LOG_CHANNEL_ID,
+        text=f"✅ `{output_filename}` processed for {callback_query.from_user.mention}"
+    )
+
+    # ---------- CLEANUP ----------
+    for f in [downloaded, output_file, file_thumb]:
+        if f and os.path.exists(f):
+            os.remove(f)
+
+    await sts.delete()
     
 
 #clone
