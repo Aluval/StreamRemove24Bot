@@ -615,92 +615,6 @@ async def callback_query_handler(bot, callback_query: CallbackQuery):
     await callback_query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
 
 """
-async def process_media(bot, callback_query, selected_streams, downloaded, output_filename, sts):
-    user_id = callback_query.from_user.id
-    output_file = output_filename
-
-    # ---------- FFmpeg Command ----------
-    ffmpeg_cmd = ['ffmpeg', '-i', downloaded, '-map', '0']
-    for idx in selected_streams:
-        ffmpeg_cmd.extend(['-map', f'-0:{idx}'])
-
-    ffmpeg_cmd.extend(['-c', 'copy', output_file, '-y'])
-
-    process = await asyncio.create_subprocess_exec(
-        *ffmpeg_cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
-    )
-    _, stderr = await process.communicate()
-
-    if process.returncode != 0:
-        await safe_edit_message(sts, f"❌ FFmpeg Error:\n{stderr.decode()}")
-        return
-
-    # ---------- File Info ----------
-    file_size = os.path.getsize(output_file)
-    size_text = humanbytes(file_size)
-
-    await safe_edit_message(sts, "📤 Uploading...")
-
-    # ---------- IF FILE > 2GB → GOOGLE DRIVE ----------
-    if file_size > FILE_SIZE_LIMIT:
-        gdrive_folder_id = await db.get_gdrive_folder_id(user_id)
-
-        if not gdrive_folder_id:
-            await safe_edit_message(
-                sts,
-                "❌ Google Drive Folder ID not set.\nUse `/gdriveid YOUR_FOLDER_ID`"
-            )
-            return
-
-        file_link = await upload_to_google_drive(
-            file_path=output_file,
-            file_name=output_filename,
-            folder_id=gdrive_folder_id,
-            sts=sts
-        )
-
-        buttons = [[InlineKeyboardButton("☁️ Google Drive Link", url=file_link)]]
-
-        await bot.send_message(
-            chat_id=user_id,
-            text=(
-                f"✅ **Stream Removed Successfully**\n\n"
-                f"📄 **File:** `{output_filename}`\n"
-                f"📦 **Size:** `{size_text}`\n\n"
-                f"🔗 **Drive Link:**\n{file_link}"
-            ),
-            reply_markup=InlineKeyboardMarkup(buttons)
-        )
-
-    # ---------- IF FILE ≤ 2GB → TELEGRAM ----------
-    else:
-        await bot.send_document(
-            chat_id=user_id,
-            document=output_file,
-            caption=(
-                f"✅ **Stream Removed Successfully**\n\n"
-                f"📄 **File:** `{output_filename}`\n"
-                f"📦 **Size:** `{size_text}`"
-            ),
-            progress=progress_message,
-            progress_args=("📤 Uploading", sts, time.time())
-        )
-
-    # ---------- LOG ----------
-    await bot.send_message(
-        chat_id=LOG_CHANNEL_ID,
-        text=f"✅ `{output_filename}` processed for {callback_query.from_user.mention}"
-    )
-
-    # ---------- CLEANUP ----------
-    for f in [downloaded, output_file]:
-        if f and os.path.exists(f):
-            os.remove(f)
-
-    await sts.delete()
-"""
     
 async def process_media(bot, callback_query, selected_streams, downloaded, output_filename, sts):
     user_id = callback_query.from_user.id
@@ -807,7 +721,156 @@ async def process_media(bot, callback_query, selected_streams, downloaded, outpu
             os.remove(f)
 
     await sts.delete()
-    
+"""
+
+
+# =========================================================
+# LINK TYPE DETECTION
+# =========================================================
+def detect_link_type(url: str):
+    url = url.lower()
+    if "workers.dev" in url or "vercel.app" in url:
+        return "ffmpeg"
+    if "drive.google.com" in url:
+        return "gdrive"
+    if any(x in url for x in ["mega.nz", "terabox", "mediafire"]):
+        return "ytdlp"
+    if url.endswith((".mkv", ".mp4", ".avi")):
+        return "direct"
+    return "unsupported"
+
+
+# =========================================================
+# DIRECT DOWNLOAD (STATIC FILES)
+# =========================================================
+async def download_direct(url, output_path):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            if resp.status != 200:
+                raise Exception("Direct download failed")
+
+            with open(output_path, "wb") as f:
+                async for chunk in resp.content.iter_chunked(1024 * 1024):
+                    f.write(chunk)
+
+
+# =========================================================
+# FFMPEG STREAM INPUT (workers.dev / vercel)
+# =========================================================
+async def ffmpeg_stream_process(url, selected_streams, output_file):
+    cmd = ["ffmpeg", "-y", "-i", url, "-map", "0"]
+    for idx in selected_streams:
+        cmd.extend(["-map", f"-0:{idx}"])
+    cmd.extend(["-c", "copy", output_file])
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+    )
+    _, stderr = await proc.communicate()
+
+    if proc.returncode != 0:
+        raise Exception(stderr.decode())
+
+
+# =========================================================
+# GOOGLE DRIVE DOWNLOAD
+# =========================================================
+
+async def download_from_drive(file_id, output_path):
+    request = drive_service.files().get_media(fileId=file_id)
+    with open(output_path, "wb") as f:
+        downloader = MediaIoBaseDownload(f, request)
+        done = False
+        while not done:
+            _, done = downloader.next_chunk()
+
+
+# =========================================================
+# YT-DLP (Mega / Terabox / Mediafire)
+# =========================================================
+async def download_with_ytdlp(url, output_path):
+    cmd = ["yt-dlp", "-o", output_path, url]
+    proc = await asyncio.create_subprocess_exec(
+        *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+    )
+    _, stderr = await proc.communicate()
+    if proc.returncode != 0:
+        raise Exception(stderr.decode())
+
+
+# =========================================================
+# MAIN PROCESS FUNCTION
+# =========================================================
+async def process_media(
+    bot,
+    callback_query,
+    selected_streams,
+    source,
+    output_filename,
+    sts,
+    link_type
+):
+    user_id = callback_query.from_user.id
+    output_file = output_filename
+
+    # ---------- PROCESS ----------
+    if link_type == "ffmpeg":
+        await ffmpeg_stream_process(source, selected_streams, output_file)
+    else:
+        ffmpeg_cmd = ["ffmpeg", "-y", "-i", source, "-map", "0"]
+        for idx in selected_streams:
+            ffmpeg_cmd.extend(["-map", f"-0:{idx}"])
+        ffmpeg_cmd.extend(["-c", "copy", output_file])
+
+        proc = await asyncio.create_subprocess_exec(
+            *ffmpeg_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            raise Exception(stderr.decode())
+
+    # ---------- FILE INFO ----------
+    size = os.path.getsize(output_file)
+
+    # ---------- THUMBNAIL ----------
+    file_thumb = None
+    try:
+        tid = await db.get_thumbnail(user_id)
+        if tid:
+            file_thumb = await bot.download_media(tid, f"thumb_{user_id}.jpg")
+    except:
+        file_thumb = None
+
+    # ---------- UPLOAD ----------
+    if size > FILE_SIZE_LIMIT:
+        folder_id = await db.get_gdrive_folder_id(user_id)
+        if not folder_id:
+            raise Exception("Google Drive folder ID not set")
+
+        link = await upload_to_google_drive(output_file, output_filename, folder_id)
+        await bot.send_message(
+            user_id,
+            f"✅ **Stream Removed**\n\n📄 `{output_filename}`\n🔗 {link}",
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("☁️ Drive Link", url=link)]]
+            ),
+        )
+    else:
+        await bot.send_document(
+            user_id,
+            output_file,
+            thumb=file_thumb,
+            caption=f"✅ **Stream Removed**\n\n📄 `{output_filename}`",
+        )
+
+    # ---------- CLEANUP ----------
+    for f in [source, output_file, file_thumb]:
+        if f and os.path.exists(f):
+            os.remove(f)
+
+    await sts.delete()
 
 #clone
 @Client.on_message(filters.private & filters.command("clone"))
